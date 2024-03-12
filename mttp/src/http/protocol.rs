@@ -21,6 +21,9 @@ pub(crate) fn parse_request(stream: &mut TcpStream) -> Result<HttpRequest, Error
     let method = match first_line.next() {
         Some("GET") => Method::Get,
         Some("POST") => Method::Post,
+        Some("PUT") => Method::Put,
+        Some("DELTE") => Method::Delete,
+        Some("PATCH") => Method::Patch,
         wrong_method => {
             return Err(Error::InvalidMethod {
                 recieved: wrong_method.unwrap_or("").to_owned(),
