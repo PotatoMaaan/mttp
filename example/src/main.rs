@@ -1,8 +1,7 @@
-use mttp::http::{HttpRequest, HttpResponse};
-use std::{
-    net::SocketAddrV4,
-    str::FromStr,
-    sync::{atomic::AtomicU64, Arc},
+use mttp::http::{HttpRequest, HttpResponse, StatusCode};
+use std::sync::{
+    atomic::{self, AtomicU64},
+    Arc,
 };
 
 struct State {
@@ -17,29 +16,31 @@ fn main() {
     server.get("/hello", hello);
     server.post("/echo", echo);
 
-    server.start(std::net::SocketAddr::V4(
-        SocketAddrV4::from_str("127.0.0.1:5000").unwrap(),
-    ));
+    server.not_found_handler(|_, _| {
+        HttpResponse::builder()
+            .status(StatusCode::NotFound)
+            .text("You picked the wrong house fool!".to_owned())
+            .build()
+    });
+
+    server.start("127.0.0.1:5000".parse().unwrap());
 }
 
-fn hello(state: Arc<State>, req: HttpRequest) -> HttpResponse {
-    let new_count = state
-        .counter
-        .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+fn hello(state: Arc<State>, _: HttpRequest) -> HttpResponse {
+    let count = state.counter.fetch_add(1, atomic::Ordering::SeqCst);
 
-    dbg!(&req.headers.cookies());
+    println!("Hello from hello handler");
 
-    println!("HANDLER HELLO");
-
-    HttpResponse::from_text(200, "Ok", format!("Hello {}", new_count))
+    HttpResponse::builder()
+        .text(format!("Hello {}", count))
+        .build()
 }
 
-fn echo(state: Arc<State>, req: HttpRequest) -> HttpResponse {
-    println!("HANDLER ECHO");
+fn echo(_: Arc<State>, req: HttpRequest) -> HttpResponse {
+    println!("Hello from echo handler");
 
-    if let Some(body) = req.body {
-        HttpResponse::from_bytes(200, "Ok", body)
-    } else {
-        HttpResponse::from_bytes(200, "Ok", Vec::new())
-    }
+    HttpResponse::builder()
+        .body(req.body)
+        .headers(req.headers)
+        .build()
 }

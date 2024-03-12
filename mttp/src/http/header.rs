@@ -1,24 +1,47 @@
-use crate::consts::{HEADER_CONTENT_LEN, HEADER_COOKIES};
+use crate::consts::{HEADER_CONTENT_LEN, HEADER_CONTENT_TYPE, HEADER_COOKIES};
 use std::collections::HashMap;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HeaderMap {
     pub values: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone)]
-pub struct Cookie {
-    pub name: String,
-    pub value: String,
+impl<const N: usize> From<[(&str, &str); N]> for HeaderMap {
+    fn from(value: [(&str, &str); N]) -> Self {
+        Self {
+            values: value
+                .into_iter()
+                .map(|(k, v)| (k.to_string(), v.to_string()))
+                .collect(),
+        }
+    }
+}
+
+impl<const N: usize> From<[(String, String); N]> for HeaderMap {
+    fn from(value: [(String, String); N]) -> Self {
+        Self {
+            values: value.into_iter().collect(),
+        }
+    }
 }
 
 impl HeaderMap {
+    pub fn empty() -> Self {
+        Self {
+            values: HashMap::new(),
+        }
+    }
+
     pub fn content_length(&self) -> Option<usize> {
         if let Some(value) = self.values.get(HEADER_CONTENT_LEN) {
             value.parse().ok()
         } else {
             None
         }
+    }
+
+    pub fn content_type(&self) -> Option<&str> {
+        self.values.get(HEADER_CONTENT_TYPE).map(|x| x.as_str())
     }
 
     pub fn cookies(&self) -> HashMap<&str, &str> {

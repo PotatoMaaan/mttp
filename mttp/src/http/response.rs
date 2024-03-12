@@ -1,45 +1,86 @@
-use super::header::HeaderMap;
-use std::collections::HashMap;
+use crate::consts::HEADER_CONTENT_TYPE;
 
-#[derive(Debug)]
+use super::{header::HeaderMap, StatusCode};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpResponse {
-    pub status: u16,
-    pub msg: String,
-    pub header: HeaderMap,
+    pub status: StatusCode,
+    pub headers: HeaderMap,
     pub body: Option<Vec<u8>>,
 }
 
+pub struct HttpResponseBuilder {
+    status: StatusCode,
+    header: HeaderMap,
+    body: Option<Vec<u8>>,
+}
+
 impl HttpResponse {
-    pub fn from_text(status: u16, msg: &str, body: String) -> Self {
-        Self {
-            status,
-            msg: msg.to_owned(),
-            header: HeaderMap {
-                values: HashMap::new(),
-            },
-            body: Some(body.into_bytes()),
-        }
-    }
-
-    pub fn from_bytes(status: u16, msg: &str, body: Vec<u8>) -> Self {
-        Self {
-            status,
-            msg: msg.to_owned(),
-            header: HeaderMap {
-                values: HashMap::new(),
-            },
-            body: Some(body),
-        }
-    }
-
-    pub fn from_status(status: u16, msg: &str) -> Self {
-        Self {
-            status,
-            msg: msg.to_owned(),
-            header: HeaderMap {
-                values: HashMap::new(),
-            },
+    pub fn builder() -> HttpResponseBuilder {
+        HttpResponseBuilder {
+            status: StatusCode::Ok,
+            header: HeaderMap::empty(),
             body: None,
+        }
+    }
+
+    pub fn sucess() -> Self {
+        Self {
+            status: StatusCode::Ok,
+            headers: HeaderMap::empty(),
+            body: None,
+        }
+    }
+}
+
+impl HttpResponseBuilder {
+    pub fn header(mut self, key: &str, value: String) -> Self {
+        self.header.values.insert(key.to_owned(), value);
+        self
+    }
+
+    pub fn headers(mut self, headers: HeaderMap) -> Self {
+        self.header = headers;
+        self
+    }
+
+    pub fn body(mut self, body: Option<Vec<u8>>) -> Self {
+        self.body = body;
+        self
+    }
+
+    pub fn status(mut self, status: StatusCode) -> Self {
+        self.status = status;
+        self
+    }
+
+    pub fn text(mut self, text: String) -> Self {
+        self.body = Some(text.into_bytes());
+        self.header
+            .values
+            .insert(HEADER_CONTENT_TYPE.to_owned(), "text/plain".to_owned());
+        self
+    }
+
+    pub fn json(mut self, json: String) -> Self {
+        self.body = Some(json.into_bytes());
+        self.header.values.insert(
+            HEADER_CONTENT_TYPE.to_owned(),
+            "application/json".to_owned(),
+        );
+        self
+    }
+
+    pub fn bytes(mut self, bytes: Vec<u8>) -> Self {
+        self.body = Some(bytes);
+        self
+    }
+
+    pub fn build(self) -> HttpResponse {
+        HttpResponse {
+            status: self.status,
+            headers: self.header,
+            body: self.body,
         }
     }
 }

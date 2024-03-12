@@ -1,9 +1,9 @@
 use super::{header::HeaderMap, Method};
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpRequest {
     pub method: Method,
-    pub uri: String,
+    pub route: String,
     pub headers: HeaderMap,
     pub body: Option<Vec<u8>>,
 }
