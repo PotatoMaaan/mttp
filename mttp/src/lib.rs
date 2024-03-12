@@ -3,11 +3,11 @@ use std::{
     io::{self, BufRead, Read, Write},
     net::{SocketAddr, TcpListener, TcpStream},
     sync::Arc,
-    time::Duration,
 };
 
 const CHUNK_END: &[u8; 4] = b"\r\n\r\n";
 pub const HEADER_CONTENT_LEN: &str = "Content-Length";
+pub const HEADER_COOKIES: &str = "Cookie";
 
 #[derive(Debug)]
 pub enum Error {
@@ -118,15 +118,88 @@ pub enum Method {
 pub struct HttpRequest {
     pub method: Method,
     pub uri: String,
-    pub headers: HashMap<String, String>,
+    pub headers: HeaderSet,
     pub body: Option<Vec<u8>>,
+}
+
+#[derive(Debug)]
+pub struct HeaderSet {
+    pub values: HashMap<String, String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct Cookie {
+    pub name: String,
+    pub value: String,
+}
+
+impl HeaderSet {
+    pub fn content_length(&self) -> Option<usize> {
+        if let Some(value) = self.values.get(HEADER_CONTENT_LEN) {
+            value.parse().ok()
+        } else {
+            None
+        }
+    }
+
+    pub fn cookies(&self) -> HashMap<&str, &str> {
+        let Some(cookies_str) = self.values.get(HEADER_COOKIES) else {
+            return HashMap::new();
+        };
+
+        if let Some(cookies) = cookies_str
+            .split("; ")
+            .map(|x| x.split_once('='))
+            .collect::<Option<HashMap<_, _>>>()
+        {
+            cookies
+        } else {
+            HashMap::new()
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct HttpResponse {
     pub status: u16,
     pub msg: String,
+    pub header: HeaderSet,
     pub body: Option<Vec<u8>>,
+}
+
+impl HttpResponse {
+    pub fn from_text(status: u16, msg: &str, body: String) -> Self {
+        Self {
+            status,
+            msg: msg.to_owned(),
+            header: HeaderSet {
+                values: HashMap::new(),
+            },
+            body: Some(body.into_bytes()),
+        }
+    }
+
+    pub fn from_bytes(status: u16, msg: &str, body: Vec<u8>) -> Self {
+        Self {
+            status,
+            msg: msg.to_owned(),
+            header: HeaderSet {
+                values: HashMap::new(),
+            },
+            body: Some(body),
+        }
+    }
+
+    pub fn from_status(status: u16, msg: &str) -> Self {
+        Self {
+            status,
+            msg: msg.to_owned(),
+            header: HeaderSet {
+                values: HashMap::new(),
+            },
+            body: None,
+        }
+    }
 }
 
 fn handle_http(stream: &mut TcpStream) -> Result<HttpRequest, Error> {
@@ -156,13 +229,9 @@ fn handle_http(stream: &mut TcpStream) -> Result<HttpRequest, Error> {
         let (key, value) = header_line.split_once(": ").ok_or(Error::InvalidHeader)?;
         headers.insert(key.to_owned(), value.to_owned());
     }
+    let headers = HeaderSet { values: headers };
 
-    let body = if let Some(content_len) = headers.get(HEADER_CONTENT_LEN) {
-        let content_len: usize = content_len.parse().map_err(|_| Error::InvalidHeaderValue {
-            header: HEADER_CONTENT_LEN.to_owned(),
-        })?;
-
-        dbg!(&content_len);
+    let body = if let Some(content_len) = headers.content_length() {
         Some(read_body(stream, content_len)?)
     } else {
         None

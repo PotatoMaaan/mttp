@@ -28,21 +28,19 @@ fn hello(state: Arc<State>, req: HttpRequest) -> HttpResponse {
         .counter
         .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
 
+    dbg!(&req.headers.cookies());
+
     println!("HANDLER HELLO");
 
-    HttpResponse {
-        status: 200,
-        msg: "Ok".to_owned(),
-        body: Some(format!("Hello {}", new_count).as_bytes().to_vec()),
-    }
+    HttpResponse::from_text(200, "Ok", format!("Hello {}", new_count))
 }
 
 fn echo(state: Arc<State>, req: HttpRequest) -> HttpResponse {
     println!("HANDLER ECHO");
 
-    HttpResponse {
-        status: 200,
-        msg: "Ok".to_owned(),
-        body: req.body,
+    if let Some(body) = req.body {
+        HttpResponse::from_bytes(200, "Ok", body)
+    } else {
+        HttpResponse::from_bytes(200, "Ok", Vec::new())
     }
 }
