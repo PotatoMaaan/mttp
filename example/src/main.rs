@@ -1,10 +1,9 @@
+use mttp::http::{HttpRequest, HttpResponse};
 use std::{
     net::SocketAddrV4,
     str::FromStr,
     sync::{atomic::AtomicU64, Arc},
 };
-
-use mttp::{HttpRequest, HttpResponse};
 
 struct State {
     counter: AtomicU64,
