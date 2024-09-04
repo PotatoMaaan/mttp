@@ -7,34 +7,24 @@ pub enum Method {
     Patch,
 }
 
+#[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum StatusCode {
-    Ok,
-    Created,
-    Accepted,
-    NoContent,
-    BadRequest,
-    Unauthorized,
-    Forbidden,
-    NotFound,
-    MethodNotAllowed,
-    InternalServerError,
+    Ok = 200,
+    Created = 201,
+    Accepted = 202,
+    NoContent = 204,
+    BadRequest = 400,
+    Unauthorized = 401,
+    Forbidden = 403,
+    NotFound = 404,
+    MethodNotAllowed = 405,
+    InternalServerError = 500,
 }
 
 impl StatusCode {
     pub fn code(&self) -> u16 {
-        match self {
-            StatusCode::Ok => 200,
-            StatusCode::Created => 201,
-            StatusCode::Accepted => 202,
-            StatusCode::NoContent => 204,
-            StatusCode::BadRequest => 400,
-            StatusCode::Unauthorized => 401,
-            StatusCode::Forbidden => 403,
-            StatusCode::NotFound => 404,
-            StatusCode::MethodNotAllowed => 405,
-            StatusCode::InternalServerError => 500,
-        }
+        *self as u16
     }
 }
 
