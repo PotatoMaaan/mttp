@@ -1,3 +1,5 @@
+use routing::{build_dynamic_routes, router};
+
 use crate::http::{
     protocol::{parse_request, write_response},
     request::HttpRequest,
@@ -7,23 +9,30 @@ use crate::http::{
 use std::{
     collections::HashMap,
     net::{SocketAddr, TcpListener},
-    sync::Arc,
+    sync::{atomic::AtomicI64, Arc},
 };
 
 mod default_handlers;
+mod routing;
+
+type Handlers<State> = HashMap<String, Handler<Arc<State>>>;
 
 #[derive(Debug)]
 pub struct Server<State: 'static + Send + Sync> {
     state: Arc<State>,
     not_found_handler: Option<Handler<Arc<State>>>,
     method_not_allowd_handler: Option<Handler<Arc<State>>>,
-    handlers: HashMap<String, Handler<Arc<State>>>,
+    handlers: Handlers<State>,
+    thread_counter: Arc<AtomicI64>,
 }
+
+type HandlerFunc<S> = fn(S, HttpRequest, HashMap<String, String>) -> HttpResponse;
 
 #[derive(Debug, Clone)]
 struct Handler<S: Clone> {
-    handler: fn(S, HttpRequest) -> HttpResponse,
+    handler: HandlerFunc<S>,
     method: Method,
+    params: HashMap<String, String>,
 }
 
 impl<State: 'static + Send + Sync> Server<State> {
@@ -33,86 +42,80 @@ impl<State: 'static + Send + Sync> Server<State> {
             state: Arc::new(state),
             not_found_handler: None,
             method_not_allowd_handler: None,
+            thread_counter: Arc::new(AtomicI64::new(0)),
         }
     }
 
-    pub fn get(&mut self, route: &str, handler: fn(Arc<State>, HttpRequest) -> HttpResponse) {
+    pub fn get(&mut self, route: &str, handler: HandlerFunc<Arc<State>>) {
         self.handlers.insert(
             route.to_owned(),
             Handler {
                 handler,
                 method: Method::Get,
+                params: HashMap::new(),
             },
         );
     }
 
-    pub fn post(&mut self, route: &str, handler: fn(Arc<State>, HttpRequest) -> HttpResponse) {
+    pub fn post(&mut self, route: &str, handler: HandlerFunc<Arc<State>>) {
         self.handlers.insert(
             route.to_owned(),
             Handler {
                 handler,
                 method: Method::Post,
+                params: HashMap::new(),
             },
         );
     }
 
-    pub fn not_found_handler(&mut self, handler: fn(Arc<State>, HttpRequest) -> HttpResponse) {
+    pub fn not_found_handler(&mut self, handler: HandlerFunc<Arc<State>>) {
         self.not_found_handler = Some(Handler {
             handler,
             method: Method::Get,
+            params: HashMap::new(),
         });
     }
 
-    pub fn method_not_allowd_handler(
-        &mut self,
-        handler: fn(Arc<State>, HttpRequest) -> HttpResponse,
-    ) {
+    pub fn method_not_allowd_handler(&mut self, handler: HandlerFunc<Arc<State>>) {
         self.method_not_allowd_handler = Some(Handler {
             handler,
             method: Method::Get,
+            params: HashMap::new(),
         });
     }
 
-    pub fn start(self, addr: SocketAddr) {
-        let socket = TcpListener::bind(addr).expect("Failed to start server");
+    pub fn start(self, addr: SocketAddr) -> std::io::Result<()> {
+        println!("Binding mttp server to {}", addr);
+        let socket = TcpListener::bind(addr)?;
+
+        let dynamic_routes = Arc::new(build_dynamic_routes(self.handlers));
+        println!("[mttp] {} routes registered", dynamic_routes.len());
 
         while let Ok((mut stream, addr)) = socket.accept() {
-            let handlers = self.handlers.clone();
             let state = self.state.clone();
             let not_found_handler = self.not_found_handler.clone();
             let method_not_allowed_handler = self.method_not_allowd_handler.clone();
+            let dynamic_routes = dynamic_routes.clone();
 
+            let thread_id = self
+                .thread_counter
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
             std::thread::Builder::new()
-                .name(format!("mttp worker for {}", addr))
+                .name(format!("mttp worker thread #{thread_id} for {}", addr))
                 .spawn(move || {
                     let parsed_request = parse_request(&mut stream);
 
                     let response = match parsed_request {
                         Ok(parsed_request) => {
-                            let not_found_handler = not_found_handler.unwrap_or(Handler {
-                                handler: default_handlers::not_found::<State>,
-                                method: Method::Get,
-                            });
-
-                            let method_not_allowed_handler =
-                                method_not_allowed_handler.unwrap_or(Handler {
-                                    handler: default_handlers::handler_method_not_allowed::<State>,
-                                    method: Method::Get,
-                                });
-
-                            let handler = if let Some(handler) = handlers.get(&parsed_request.route)
-                            {
-                                if parsed_request.method == handler.method {
-                                    handler
-                                } else {
-                                    &method_not_allowed_handler
-                                }
-                            } else {
-                                &not_found_handler
-                            };
+                            let handler = router(
+                                &dynamic_routes,
+                                not_found_handler,
+                                method_not_allowed_handler,
+                                &parsed_request,
+                            );
 
                             // Actual handler gets run here
-                            (handler.handler)(state, parsed_request)
+                            (handler.handler)(state, parsed_request, handler.params)
                         }
                         Err(e) => HttpResponse::builder()
                             .status(StatusCode::BadRequest)
@@ -121,8 +124,10 @@ impl<State: 'static + Send + Sync> Server<State> {
                     };
 
                     write_response(&mut stream, response).expect("Failed to write response");
-                })
-                .expect("Failed to spawn worker thread");
+                })?;
         }
+
+        println!("Stopping server");
+        Ok(())
     }
 }

@@ -3,6 +3,7 @@
 
 pub mod consts;
 pub mod http;
+pub mod url;
 
 mod error;
 mod server;

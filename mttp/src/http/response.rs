@@ -31,6 +31,13 @@ impl HttpResponse {
             body: None,
         }
     }
+
+    pub fn not_found() -> Self {
+        HttpResponse::builder()
+            .status(StatusCode::NotFound)
+            .text("The requested resource was not found on the server".to_owned())
+            .build()
+    }
 }
 
 impl HttpResponseBuilder {
