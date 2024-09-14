@@ -11,9 +11,9 @@ pub fn parse_query_params_and_urldecode<'a>(url: &'a str) -> (&'a str, HashMap<S
 
     let (url, params) = url.split_at(qm_index);
 
-    let params = params.strip_prefix('?').unwrap_or(params);
-
     let params = params
+        .strip_prefix('?')
+        .unwrap_or(params)
         .split('&')
         .map(|pair| {
             let idx = pair.char_indices().find_map(|(i, c)| match c {
@@ -35,7 +35,8 @@ pub fn parse_query_params_and_urldecode<'a>(url: &'a str) -> (&'a str, HashMap<S
             _ => None,
         })
         .filter_map(|x| x)
-        .collect::<HashMap<_, _>>();
+        .filter(|(k, _)| k != "")
+        .collect();
 
     (url, params)
 }

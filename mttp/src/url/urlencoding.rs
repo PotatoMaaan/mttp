@@ -4,7 +4,6 @@ pub fn decode_binary(input: &str) -> Option<Vec<u8>> {
     let input = input.as_bytes();
 
     let mut output = Vec::new();
-
     let mut i = 0;
 
     while let Some(current) = input.get(i) {
