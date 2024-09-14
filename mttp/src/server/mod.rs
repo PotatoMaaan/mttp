@@ -13,77 +13,40 @@ use std::{
 };
 
 mod default_handlers;
+mod public_funcs;
 mod routing;
-
-type Handlers<State> = HashMap<String, Handler<Arc<State>>>;
 
 #[derive(Debug)]
 pub struct Server<State: 'static + Send + Sync> {
     state: Arc<State>,
-    not_found_handler: Option<Handler<Arc<State>>>,
-    method_not_allowd_handler: Option<Handler<Arc<State>>>,
+    not_found_handler: RegisteredRoute<Arc<State>>,
+    method_not_allowd_handler: RegisteredRoute<Arc<State>>,
+    error_handler: fn(error: Box<dyn std::error::Error>) -> HttpResponse,
     handlers: Handlers<State>,
     thread_counter: Arc<AtomicI64>,
+    middlewares: Vec<MiddlewareFunc<Arc<State>>>,
+    inspector: fn(&HttpResponse),
 }
 
-type HandlerFunc<S> = fn(S, HttpRequest, HashMap<String, String>) -> HttpResponse;
+type Handlers<State> = HashMap<String, RegisteredRoute<Arc<State>>>;
+type HandlerFunc<S> = fn(S, HttpRequest) -> Result<HttpResponse, Box<dyn std::error::Error>>;
+type MiddlewareFunc<S> = fn(S, &mut HttpRequest) -> MiddlewareResult;
 
 #[derive(Debug, Clone)]
-struct Handler<S: Clone> {
+struct RegisteredRoute<S: Clone> {
     handler: HandlerFunc<S>,
+    specific_middlewares: Vec<MiddlewareFunc<S>>,
     method: Method,
     params: HashMap<String, String>,
 }
 
+#[derive(Debug)]
+pub enum MiddlewareResult {
+    Continue,
+    Abort(HttpResponse),
+}
+
 impl<State: 'static + Send + Sync> Server<State> {
-    pub fn new(state: State) -> Self {
-        Self {
-            handlers: HashMap::new(),
-            state: Arc::new(state),
-            not_found_handler: None,
-            method_not_allowd_handler: None,
-            thread_counter: Arc::new(AtomicI64::new(0)),
-        }
-    }
-
-    pub fn get(&mut self, route: &str, handler: HandlerFunc<Arc<State>>) {
-        self.handlers.insert(
-            route.to_owned(),
-            Handler {
-                handler,
-                method: Method::Get,
-                params: HashMap::new(),
-            },
-        );
-    }
-
-    pub fn post(&mut self, route: &str, handler: HandlerFunc<Arc<State>>) {
-        self.handlers.insert(
-            route.to_owned(),
-            Handler {
-                handler,
-                method: Method::Post,
-                params: HashMap::new(),
-            },
-        );
-    }
-
-    pub fn not_found_handler(&mut self, handler: HandlerFunc<Arc<State>>) {
-        self.not_found_handler = Some(Handler {
-            handler,
-            method: Method::Get,
-            params: HashMap::new(),
-        });
-    }
-
-    pub fn method_not_allowd_handler(&mut self, handler: HandlerFunc<Arc<State>>) {
-        self.method_not_allowd_handler = Some(Handler {
-            handler,
-            method: Method::Get,
-            params: HashMap::new(),
-        });
-    }
-
     pub fn start(self, addr: SocketAddr) -> std::io::Result<()> {
         println!("Binding mttp server to {}", addr);
         let socket = TcpListener::bind(addr)?;
@@ -96,6 +59,8 @@ impl<State: 'static + Send + Sync> Server<State> {
             let not_found_handler = self.not_found_handler.clone();
             let method_not_allowed_handler = self.method_not_allowd_handler.clone();
             let dynamic_routes = dynamic_routes.clone();
+            let middlewares = self.middlewares.clone();
+            let error_handler = self.error_handler.clone();
 
             let thread_id = self
                 .thread_counter
@@ -104,9 +69,8 @@ impl<State: 'static + Send + Sync> Server<State> {
                 .name(format!("mttp worker thread #{thread_id} for {}", addr))
                 .spawn(move || {
                     let parsed_request = parse_request(&mut stream);
-
-                    let response = match parsed_request {
-                        Ok(parsed_request) => {
+                    let handler_attempt = match parsed_request {
+                        Ok(mut parsed_request) => {
                             let handler = router(
                                 &dynamic_routes,
                                 not_found_handler,
@@ -114,16 +78,38 @@ impl<State: 'static + Send + Sync> Server<State> {
                                 &parsed_request,
                             );
 
-                            // Actual handler gets run here
-                            (handler.handler)(state, parsed_request, handler.params)
+                            let mut middlewares = middlewares;
+                            middlewares.extend(handler.specific_middlewares);
+
+                            parsed_request.params.extend(handler.params);
+
+                            if let Some(abort) = middlewares
+                                .into_iter()
+                                .map(|middleware| middleware(state.clone(), &mut parsed_request))
+                                .find_map(|x| match x {
+                                    MiddlewareResult::Continue => None,
+                                    MiddlewareResult::Abort(abort) => Some(abort),
+                                })
+                            {
+                                Ok(abort)
+                            } else {
+                                // Actual handler gets run here
+                                (handler.handler)(state.clone(), parsed_request)
+                            }
                         }
-                        Err(e) => HttpResponse::builder()
+                        Err(e) => Ok(HttpResponse::builder()
                             .status(StatusCode::BadRequest)
                             .text(format!("Error processing HTTP: {}", e))
-                            .build(),
+                            .build()),
                     };
 
-                    write_response(&mut stream, response).expect("Failed to write response");
+                    let final_response = match handler_attempt {
+                        Ok(v) => v,
+                        Err(e) => error_handler(e),
+                    };
+
+                    (self.inspector)(&final_response);
+                    write_response(&mut stream, final_response).expect("Failed to write response");
                 })?;
         }
 

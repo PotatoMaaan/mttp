@@ -1,9 +1,5 @@
-use super::{Handler, Handlers};
-use crate::{
-    http::{HttpRequest, Method},
-    server::default_handlers,
-    url,
-};
+use super::{Handlers, RegisteredRoute};
+use crate::http::HttpRequest;
 use std::{
     collections::HashMap,
     ffi::OsString,
@@ -16,12 +12,12 @@ use std::{
 pub enum Route<State> {
     Static {
         route: PathBuf,
-        handler: Handler<Arc<State>>,
+        handler: RegisteredRoute<Arc<State>>,
     },
     Dynamic {
         route: PathBuf,
         dynamic_component_positions: HashMap<usize, OsString>,
-        handler: Handler<Arc<State>>,
+        handler: RegisteredRoute<Arc<State>>,
     },
 }
 
@@ -62,22 +58,10 @@ pub fn build_dynamic_routes<State>(handlers: Handlers<State>) -> Vec<Route<State
 
 pub fn router<State: 'static + Send + Sync>(
     routes: &[Route<State>],
-    not_found_handler: Option<Handler<Arc<State>>>,
-    method_not_allowed_handler: Option<Handler<Arc<State>>>,
+    not_found_handler: RegisteredRoute<Arc<State>>,
+    method_not_allowed_handler: RegisteredRoute<Arc<State>>,
     current_request: &HttpRequest,
-) -> Handler<Arc<State>> {
-    let not_found_handler = not_found_handler.unwrap_or(Handler {
-        handler: default_handlers::not_found::<State>,
-        method: Method::Get,
-        params: HashMap::new(),
-    });
-
-    let method_not_allowed_handler = method_not_allowed_handler.unwrap_or(Handler {
-        handler: default_handlers::handler_method_not_allowed::<State>,
-        method: Method::Get,
-        params: HashMap::new(),
-    });
-
+) -> RegisteredRoute<Arc<State>> {
     if let Some(handler) = match_route(&routes, current_request) {
         if current_request.method == handler.method {
             handler.clone()
@@ -92,17 +76,13 @@ pub fn router<State: 'static + Send + Sync>(
 fn match_route<State>(
     routes: &[Route<State>],
     request: &HttpRequest,
-) -> Option<Handler<Arc<State>>> {
-    let (url, queryparams) = url::queryparams::parse_query_params_and_urldecode(&request.route);
-    let req_route = Path::new(url);
+) -> Option<RegisteredRoute<Arc<State>>> {
+    let req_route = Path::new(&request.route);
 
     routes.iter().find_map(|route| match route {
         Route::Static { route, handler } => {
             if req_route == route {
-                let mut handler = handler.clone();
-                handler.params.extend(queryparams.clone());
-
-                Some(handler)
+                Some(handler.clone())
             } else {
                 None
             }
@@ -127,7 +107,6 @@ fn match_route<State>(
                 .enumerate()
                 .map(|(curr_pos, (request_component, route_component))| {
                     if let Some(dynamic_part) = positions.get(&curr_pos) {
-                        handler.params.extend(queryparams.clone());
                         let key = dynamic_part.to_string_lossy();
                         let key = key
                             .strip_prefix(':')

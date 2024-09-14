@@ -1,15 +1,14 @@
 use super::{header::HeaderMap, request::HttpRequest, HttpResponse, Method};
 use crate::{
     consts::{CHUNK_END, HEADER_CONTENT_LEN, HTTP_VER_STR},
-    Error,
+    url, Error,
 };
 use std::{
     collections::HashMap,
     io::{BufRead, Read, Write},
-    net::TcpStream,
 };
 
-pub(crate) fn parse_request(stream: &mut TcpStream) -> Result<HttpRequest, Error> {
+pub(crate) fn parse_request(stream: &mut impl Read) -> Result<HttpRequest, Error> {
     let header_chunk = read_header(stream)?;
     let mut lines = header_chunk.lines();
 
@@ -22,7 +21,7 @@ pub(crate) fn parse_request(stream: &mut TcpStream) -> Result<HttpRequest, Error
         Some("GET") => Method::Get,
         Some("POST") => Method::Post,
         Some("PUT") => Method::Put,
-        Some("DELTE") => Method::Delete,
+        Some("DELETE") => Method::Delete,
         Some("PATCH") => Method::Patch,
         wrong_method => {
             return Err(Error::InvalidMethod {
@@ -31,7 +30,7 @@ pub(crate) fn parse_request(stream: &mut TcpStream) -> Result<HttpRequest, Error
         }
     };
 
-    let uri = first_line.next().ok_or(Error::NoUri)?.to_owned();
+    let raw_uri = first_line.next().ok_or(Error::NoUri)?.to_owned();
 
     let http_ver = first_line.next().ok_or(Error::UnsupportedVersion)?;
     if http_ver != HTTP_VER_STR {
@@ -52,15 +51,19 @@ pub(crate) fn parse_request(stream: &mut TcpStream) -> Result<HttpRequest, Error
         None
     };
 
+    let (only_uri, queryparams) = url::queryparams::parse_query_params_and_urldecode(&raw_uri);
+
     Ok(HttpRequest {
         method,
-        route: uri,
         headers,
         body,
+        route: only_uri.to_owned(),
+        raw_route: raw_uri,
+        params: queryparams,
     })
 }
 
-fn read_header(stream: &mut TcpStream) -> Result<Vec<u8>, Error> {
+fn read_header(stream: &mut impl Read) -> Result<Vec<u8>, Error> {
     let mut total: Vec<u8> = Vec::with_capacity(128);
 
     let mut current = [0; 4];
@@ -87,7 +90,7 @@ fn read_header(stream: &mut TcpStream) -> Result<Vec<u8>, Error> {
     Ok(total)
 }
 
-fn read_body(stream: &mut TcpStream, size: usize) -> Result<Vec<u8>, Error> {
+fn read_body(stream: &mut impl Read, size: usize) -> Result<Vec<u8>, Error> {
     let mut buf = vec![0; size];
     let read = stream.read(&mut buf)?;
     if read != size {
@@ -101,7 +104,7 @@ fn read_body(stream: &mut TcpStream, size: usize) -> Result<Vec<u8>, Error> {
 }
 
 pub(crate) fn write_response(
-    stream: &mut TcpStream,
+    stream: &mut impl Write,
     mut response: HttpResponse,
 ) -> Result<(), crate::Error> {
     if let Some(body) = &response.body {
@@ -113,7 +116,7 @@ pub(crate) fn write_response(
 
     stream.write_all(
         format!(
-            "\r\n{} {} {}",
+            "{} {} {}",
             HTTP_VER_STR,
             response.status.code(),
             response.status.display_name()
