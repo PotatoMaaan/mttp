@@ -3,7 +3,7 @@
 a minimal http server library writtem from scratch without any external dependencies
 
 > [!CAUTION]
-> This is only for educational use only and should not be used in any serious manner!
+> This is for educational use only and should not be used in any serious manner!
 > Most of the HTTP spec is not implemented
 
 # Features
