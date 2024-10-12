@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use super::{header::HeaderMap, Method};
+use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpRequest {

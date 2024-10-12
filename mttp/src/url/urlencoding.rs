@@ -7,16 +7,20 @@ pub fn decode_binary(input: &str) -> Option<Vec<u8>> {
     let mut i = 0;
 
     while let Some(current) = input.get(i) {
-        if *current == b'+' {
-            output.push(b' ');
-            i += 1;
-            continue;
-        }
+        match *current {
+            b'+' => {
+                output.push(b' ');
+                i += 1;
+                continue;
+            }
 
-        if *current != b'%' {
-            output.push(*current);
-            i += 1;
-            continue;
+            b'%' => {}
+
+            _ => {
+                output.push(*current);
+                i += 1;
+                continue;
+            }
         }
 
         let Some(encoded) = input.get(i + 1..i + 3) else {

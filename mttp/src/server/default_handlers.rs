@@ -1,7 +1,6 @@
+use super::{HandlerFunc, RegisteredRoute};
 use crate::http::{HttpRequest, HttpResponse, Method};
 use std::{collections::HashMap, sync::Arc};
-
-use super::{HandlerFunc, RegisteredRoute};
 
 pub fn not_found<Hs>(_: Arc<Hs>, _: HttpRequest) -> crate::Result {
     Ok(HttpResponse::not_found())

@@ -1,11 +1,10 @@
-use routing::{build_dynamic_routes, router};
-
 use crate::http::{
     protocol::{parse_request, write_response},
     request::HttpRequest,
     response::HttpResponse,
     Method, StatusCode,
 };
+use routing::{build_dynamic_routes, router};
 use std::{
     collections::HashMap,
     net::{SocketAddr, TcpListener},
@@ -48,7 +47,7 @@ pub enum MiddlewareResult {
 
 impl<State: 'static + Send + Sync> Server<State> {
     pub fn start(self, addr: SocketAddr) -> std::io::Result<()> {
-        println!("Binding mttp server to {}", addr);
+        println!("Binding mttp server to http://{}", addr);
         let socket = TcpListener::bind(addr)?;
 
         let dynamic_routes = Arc::new(build_dynamic_routes(self.handlers));

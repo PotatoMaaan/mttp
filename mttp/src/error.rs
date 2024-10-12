@@ -16,7 +16,7 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let txt = match self {
             Error::Io(e) => format!("Io Error: {e}"),
-            Error::Empty => format!("A required fiel was empty"),
+            Error::Empty => format!("A required field was empty"),
             Error::InvalidHeader => format!("A header was invalid"),
             Error::NoUri => format!("No URI was provided"),
             Error::InvalidMethod { recieved } => format!("Invalid method '{recieved}'"),

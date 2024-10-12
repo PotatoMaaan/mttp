@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Method {
     Get,
@@ -20,6 +22,8 @@ pub enum StatusCode {
     NotFound = 404,
     MethodNotAllowed = 405,
     InternalServerError = 500,
+    ImATeapot = 418,
+    PaymentRequired = 402,
 }
 
 impl StatusCode {
@@ -29,7 +33,7 @@ impl StatusCode {
 }
 
 impl StatusCode {
-    pub fn display_name(&self) -> &str {
+    pub fn text_name(&self) -> &str {
         match self {
             StatusCode::Ok => "OK",
             StatusCode::Created => "Created",
@@ -41,6 +45,14 @@ impl StatusCode {
             StatusCode::NotFound => "Not Found",
             StatusCode::MethodNotAllowed => "Method Not Allowed",
             StatusCode::InternalServerError => "Internal Server Error",
+            StatusCode::ImATeapot => "I'm a teapot",
+            StatusCode::PaymentRequired => "Payment Required",
         }
+    }
+}
+
+impl Display for StatusCode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.code(), self.text_name())
     }
 }

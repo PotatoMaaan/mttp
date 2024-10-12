@@ -27,7 +27,7 @@ fn main() {
 
     server.get("/hello", hello, vec![]);
     server.get("/only/with/auth", only_with_auth, vec![mw_auth]);
-    server.get("/person/:id/info", person, vec![]);
+    server.get("/person/:id/info/:faktenlage/fake", person, vec![]);
     server.post("/echo", echo, vec![]);
 
     server.middleware(mw_log);

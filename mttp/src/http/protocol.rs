@@ -92,13 +92,7 @@ fn read_header(stream: &mut impl Read) -> Result<Vec<u8>, Error> {
 
 fn read_body(stream: &mut impl Read, size: usize) -> Result<Vec<u8>, Error> {
     let mut buf = vec![0; size];
-    let read = stream.read(&mut buf)?;
-    if read != size {
-        return Err(Error::BodyTooShort {
-            expt: size,
-            got: read,
-        });
-    }
+    stream.read_exact(&mut buf)?;
 
     Ok(buf)
 }
@@ -114,15 +108,7 @@ pub(crate) fn write_response(
             .insert(HEADER_CONTENT_LEN.to_owned(), body.len().to_string());
     }
 
-    stream.write_all(
-        format!(
-            "{} {} {}",
-            HTTP_VER_STR,
-            response.status.code(),
-            response.status.display_name()
-        )
-        .as_bytes(),
-    )?;
+    stream.write_all(format!("{} {}", HTTP_VER_STR, response.status).as_bytes())?;
 
     if response.headers.values.len() != 0 {
         for (key, value) in response.headers.values {

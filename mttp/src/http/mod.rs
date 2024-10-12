@@ -8,3 +8,6 @@ pub use header::*;
 pub use request::*;
 pub use response::*;
 pub use status::*;
+
+#[cfg(test)]
+mod test;
