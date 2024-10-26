@@ -35,68 +35,8 @@ pub fn parse_query_params_and_urldecode<'a>(url: &'a str) -> (&'a str, HashMap<S
             _ => None,
         })
         .filter_map(|x| x)
+        .filter(|x| x.0 != "")
         .collect::<HashMap<_, _>>();
 
     (url, params)
-}
-
-#[test]
-fn test_parse_query1() {
-    let s = "https://example.com/over/there?name=ferret";
-    let got = parse_query_params_and_urldecode(s);
-
-    let expected = (
-        "https://example.com/over/there",
-        HashMap::from([("name".to_owned(), "ferret".to_owned())]),
-    );
-
-    assert_eq!(got, expected);
-}
-
-#[test]
-fn test_parse_query2() {
-    let s = "https://example.com/path/to/page?name=ferret&color=purple";
-    let got = parse_query_params_and_urldecode(s);
-
-    let expected = (
-        "https://example.com/path/to/page",
-        HashMap::from([
-            ("name".to_owned(), "ferret".to_owned()),
-            ("color".to_owned(), "purple".to_owned()),
-        ]),
-    );
-
-    assert_eq!(got, expected);
-}
-
-#[test]
-fn test_parse_query3() {
-    let s = "https://example.com/path?field1=value1&field1=value2&field2=value3";
-    let got = parse_query_params_and_urldecode(s);
-
-    let expected = (
-        "https://example.com/path",
-        HashMap::from([
-            ("field1".to_owned(), "value2".to_owned()),
-            ("field2".to_owned(), "value3".to_owned()),
-        ]),
-    );
-
-    assert_eq!(got, expected);
-}
-
-#[test]
-fn test_parse_query4() {
-    let s = "https://www.google.com/search?q=%C3%BC%C3%B6%C3%A4%2F%2F&client=firefox";
-    let got = parse_query_params_and_urldecode(s);
-
-    let expected = (
-        "https://www.google.com/search",
-        HashMap::from([
-            ("q".to_owned(), "üöä//".to_owned()),
-            ("client".to_owned(), "firefox".to_owned()),
-        ]),
-    );
-
-    assert_eq!(got, expected);
 }

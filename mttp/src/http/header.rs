@@ -32,6 +32,14 @@ impl HeaderMap {
         }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.values.is_empty()
+    }
+
+    pub fn len(&self) -> usize {
+        self.values.len()
+    }
+
     pub fn content_length(&self) -> Option<usize> {
         if let Some(value) = self.values.get(HEADER_CONTENT_LEN) {
             value.parse().ok()
@@ -58,5 +66,9 @@ impl HeaderMap {
         } else {
             HashMap::new()
         }
+    }
+
+    pub fn get(&self, key: &str) -> Option<&String> {
+        self.values.get(key)
     }
 }
