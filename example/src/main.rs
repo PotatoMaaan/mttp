@@ -1,6 +1,6 @@
 use mttp::{
     http::{HttpRequest, HttpResponse},
-    MiddlewareResult,
+    MiddlewareResult, WebSocketMessage,
 };
 use std::{
     collections::HashMap,
@@ -30,6 +30,8 @@ fn main() {
     server.get("/person/:id/info/:faktenlage/fake", person, vec![]);
     server.post("/echo", echo, vec![]);
 
+    server.websocket("/ws/test", ws_handler, vec![]);
+
     server.middleware(mw_log);
 
     server.error_handler(error_handler);
@@ -45,6 +47,12 @@ fn error_handler(e: Box<dyn std::error::Error>) -> HttpResponse {
         .text("Something went wrong".to_owned())
         .status(mttp::http::StatusCode::InternalServerError)
         .build()
+}
+
+fn ws_handler(state: Arc<State>, req: &HttpRequest, message: WebSocketMessage) {
+    dbg!(&req);
+
+    todo!()
 }
 
 // gets run after all handlers have run.

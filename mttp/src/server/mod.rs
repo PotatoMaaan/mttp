@@ -27,13 +27,26 @@ pub struct Server<State: 'static + Send + Sync> {
     inspector: fn(&HttpResponse),
 }
 
+#[derive(Debug, Clone)]
+pub enum WebSocketMessage {
+    Text(String),
+    Bytes(Vec<u8>),
+}
+
 type Handlers<State> = HashMap<String, RegisteredRoute<Arc<State>>>;
-type HandlerFunc<S> = fn(S, HttpRequest) -> Result<HttpResponse, Box<dyn std::error::Error>>;
+type HttpHandlerFunc<S> = fn(S, HttpRequest) -> Result<HttpResponse, Box<dyn std::error::Error>>;
 type MiddlewareFunc<S> = fn(S, &mut HttpRequest) -> MiddlewareResult;
+type WsHandlerFunc<S> = fn(S, &HttpRequest, WebSocketMessage);
+
+#[derive(Debug, Clone)]
+enum HandlerType<S> {
+    WebSocket(WsHandlerFunc<S>),
+    Http(HttpHandlerFunc<S>),
+}
 
 #[derive(Debug, Clone)]
 struct RegisteredRoute<S: Clone> {
-    handler: HandlerFunc<S>,
+    handler: HandlerType<S>,
     specific_middlewares: Vec<MiddlewareFunc<S>>,
     method: Method,
     params: HashMap<String, String>,
@@ -93,7 +106,15 @@ impl<State: 'static + Send + Sync> Server<State> {
                                 Ok(abort)
                             } else {
                                 // Actual handler gets run here
-                                (handler.handler)(state.clone(), parsed_request)
+
+                                match handler.handler {
+                                    HandlerType::WebSocket(handler) => {
+                                        todo!("impl websocket");
+                                    }
+                                    HandlerType::Http(handler) => {
+                                        (handler)(state.clone(), parsed_request)
+                                    }
+                                }
                             }
                         }
                         Err(e) => Ok(HttpResponse::builder()

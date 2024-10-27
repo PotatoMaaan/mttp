@@ -1,6 +1,6 @@
 use super::{
     default_handlers::{self, make_default},
-    HandlerFunc, MiddlewareFunc, RegisteredRoute, Server,
+    HandlerType, HttpHandlerFunc, MiddlewareFunc, RegisteredRoute, Server, WsHandlerFunc,
 };
 use crate::http::{HttpResponse, Method};
 use std::{
@@ -13,13 +13,13 @@ macro_rules! impl_method_func {
         pub fn $name(
             &mut self,
             route: &str,
-            handler: HandlerFunc<Arc<State>>,
+            handler: HttpHandlerFunc<Arc<State>>,
             middleware: Vec<MiddlewareFunc<Arc<State>>>,
         ) {
             self.handlers.insert(
                 route.to_owned(),
                 RegisteredRoute {
-                    handler,
+                    handler: HandlerType::Http(handler),
                     method: Method::$method,
                     params: HashMap::new(),
                     specific_middlewares: middleware,
@@ -31,9 +31,9 @@ macro_rules! impl_method_func {
 
 macro_rules! impl_specific_handler_func {
     ($name:ident) => {
-        pub fn $name(&mut self, handler: HandlerFunc<Arc<State>>) {
+        pub fn $name(&mut self, handler: HttpHandlerFunc<Arc<State>>) {
             self.$name = RegisteredRoute {
-                handler,
+                handler: HandlerType::Http(handler),
                 method: Method::Get,
                 params: HashMap::new(),
                 specific_middlewares: Vec::new(),
@@ -68,6 +68,23 @@ impl<State: 'static + Send + Sync> Server<State> {
 
     impl_specific_handler_func!(not_found_handler);
     impl_specific_handler_func!(method_not_allowd_handler);
+
+    pub fn websocket(
+        &mut self,
+        route: &str,
+        handler: WsHandlerFunc<Arc<State>>,
+        middleware: Vec<MiddlewareFunc<Arc<State>>>,
+    ) {
+        self.handlers.insert(
+            route.to_owned(),
+            RegisteredRoute {
+                handler: HandlerType::WebSocket(handler),
+                specific_middlewares: middleware,
+                method: Method::Get,
+                params: HashMap::new(),
+            },
+        );
+    }
 
     pub fn middleware(&mut self, handler: MiddlewareFunc<Arc<State>>) {
         self.middlewares.push(handler);

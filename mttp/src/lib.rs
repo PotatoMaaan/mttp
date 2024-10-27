@@ -5,10 +5,11 @@ pub type Result = core::result::Result<HttpResponse, Box<dyn std::error::Error>>
 
 pub mod consts;
 pub mod http;
-pub mod url;
+pub mod websocket;
 
 mod error;
 mod server;
+mod url;
 
 pub use error::Error;
 use http::HttpResponse;

@@ -1,4 +1,4 @@
-use super::{HandlerFunc, RegisteredRoute};
+use super::{HttpHandlerFunc, RegisteredRoute};
 use crate::http::{HttpRequest, HttpResponse, Method};
 use std::{collections::HashMap, sync::Arc};
 
@@ -21,9 +21,9 @@ pub fn error(e: Box<dyn std::error::Error>) -> HttpResponse {
         .build()
 }
 
-pub fn make_default<S: Clone>(handler: HandlerFunc<S>) -> RegisteredRoute<S> {
+pub fn make_default<S: Clone>(handler: HttpHandlerFunc<S>) -> RegisteredRoute<S> {
     RegisteredRoute {
-        handler,
+        handler: super::HandlerType::Http(handler),
         specific_middlewares: Vec::new(),
         method: Method::Get,
         params: HashMap::new(),

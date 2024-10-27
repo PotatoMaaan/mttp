@@ -1,7 +1,8 @@
 use super::{header::HeaderMap, request::HttpRequest, HttpResponse, Method};
 use crate::{
-    consts::{CHUNK_END, HEADER_CONTENT_LEN, HTTP_VER_STR},
-    url, Error,
+    consts::{headers::CONTENT_LEN, CHUNK_END, HTTP_VER_STR},
+    url::parse_query_params_and_urldecode,
+    Error,
 };
 use std::{
     collections::HashMap,
@@ -51,7 +52,7 @@ pub(crate) fn parse_request(stream: &mut impl Read) -> Result<HttpRequest, Error
         None
     };
 
-    let (only_uri, queryparams) = url::queryparams::parse_query_params_and_urldecode(&raw_uri);
+    let (only_uri, queryparams) = parse_query_params_and_urldecode(&raw_uri);
 
     Ok(HttpRequest {
         method,
@@ -105,7 +106,7 @@ pub(crate) fn write_response(
         response
             .headers
             .values
-            .insert(HEADER_CONTENT_LEN.to_owned(), body.len().to_string());
+            .insert(CONTENT_LEN.to_owned(), body.len().to_string());
     }
 
     stream.write_all(format!("{} {}", HTTP_VER_STR, response.status).as_bytes())?;

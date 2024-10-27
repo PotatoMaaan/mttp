@@ -1,4 +1,4 @@
-use crate::consts::{HEADER_CONTENT_LEN, HEADER_CONTENT_TYPE, HEADER_COOKIES};
+use crate::consts::headers::{CONTENT_LEN, CONTENT_TYPE, COOKIES};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,7 +41,7 @@ impl HeaderMap {
     }
 
     pub fn content_length(&self) -> Option<usize> {
-        if let Some(value) = self.values.get(HEADER_CONTENT_LEN) {
+        if let Some(value) = self.values.get(CONTENT_LEN) {
             value.parse().ok()
         } else {
             None
@@ -49,11 +49,11 @@ impl HeaderMap {
     }
 
     pub fn content_type(&self) -> Option<&str> {
-        self.values.get(HEADER_CONTENT_TYPE).map(|x| x.as_str())
+        self.values.get(CONTENT_TYPE).map(|x| x.as_str())
     }
 
     pub fn cookies(&self) -> HashMap<&str, &str> {
-        let Some(cookies_str) = self.values.get(HEADER_COOKIES) else {
+        let Some(cookies_str) = self.values.get(COOKIES) else {
             return HashMap::new();
         };
 
