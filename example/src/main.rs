@@ -1,5 +1,6 @@
 use mttp::{
     http::{HttpRequest, HttpResponse},
+    websocket::WsConnection,
     MiddlewareResult, WebSocketMessage,
 };
 use std::{
@@ -49,8 +50,12 @@ fn error_handler(e: Box<dyn std::error::Error>) -> HttpResponse {
         .build()
 }
 
-fn ws_handler(state: Arc<State>, req: &HttpRequest, message: WebSocketMessage) {
-    dbg!(&req);
+fn ws_handler(state: Arc<State>, req: &HttpRequest, mut ws: WsConnection) {
+    println!("recieving");
+    loop {
+        let msg = ws.revc().unwrap();
+        dbg!(&msg);
+    }
 
     todo!()
 }

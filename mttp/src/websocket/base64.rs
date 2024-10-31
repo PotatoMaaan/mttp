@@ -1,6 +1,6 @@
 const BASE64_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
-fn base64_encode(input: &[u8]) -> String {
+pub fn encode(input: &[u8]) -> String {
     let mut encoded = String::new();
     let mut i = 0;
 
@@ -41,7 +41,7 @@ fn base64_encode(input: &[u8]) -> String {
 #[test]
 fn base_64_dec_test1() {
     let s = "amogus amogus amogus the voices the voices the fog is coming the fog is coming";
-    let encoded = base64_encode(s.as_bytes());
+    let encoded = encode(s.as_bytes());
 
     let expected = "YW1vZ3VzIGFtb2d1cyBhbW9ndXMgdGhlIHZvaWNlcyB0aGUgdm9pY2VzIHRoZSBmb2cgaXMgY29taW5nIHRoZSBmb2cgaXMgY29taW5n";
 

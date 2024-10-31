@@ -99,7 +99,7 @@ fn read_body(stream: &mut impl Read, size: usize) -> Result<Vec<u8>, Error> {
 }
 
 pub(crate) fn write_response(
-    stream: &mut impl Write,
+    mut stream: impl Write,
     mut response: HttpResponse,
 ) -> Result<(), crate::Error> {
     if let Some(body) = &response.body {

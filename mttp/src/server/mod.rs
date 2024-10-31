@@ -1,8 +1,11 @@
-use crate::http::{
-    protocol::{parse_request, write_response},
-    request::HttpRequest,
-    response::HttpResponse,
-    Method, StatusCode,
+use crate::{
+    http::{
+        protocol::{parse_request, write_response},
+        request::HttpRequest,
+        response::HttpResponse,
+        Method, StatusCode,
+    },
+    websocket::{self, WsConnection},
 };
 use routing::{build_dynamic_routes, router};
 use std::{
@@ -31,12 +34,15 @@ pub struct Server<State: 'static + Send + Sync> {
 pub enum WebSocketMessage {
     Text(String),
     Bytes(Vec<u8>),
+    Close,
+    Ping,
+    Pong,
 }
 
 type Handlers<State> = HashMap<String, RegisteredRoute<Arc<State>>>;
 type HttpHandlerFunc<S> = fn(S, HttpRequest) -> Result<HttpResponse, Box<dyn std::error::Error>>;
 type MiddlewareFunc<S> = fn(S, &mut HttpRequest) -> MiddlewareResult;
-type WsHandlerFunc<S> = fn(S, &HttpRequest, WebSocketMessage);
+pub(crate) type WsHandlerFunc<S> = fn(S, &HttpRequest, WsConnection);
 
 #[derive(Debug, Clone)]
 enum HandlerType<S> {
@@ -109,7 +115,16 @@ impl<State: 'static + Send + Sync> Server<State> {
 
                                 match handler.handler {
                                     HandlerType::WebSocket(handler) => {
-                                        todo!("impl websocket");
+                                        println!("[mttp] Handing off to websocket");
+                                        websocket::websocket(
+                                            state.clone(),
+                                            parsed_request,
+                                            handler,
+                                            stream,
+                                        )
+                                        .unwrap();
+                                        println!("[mttp] Control returned from websocket");
+                                        return;
                                     }
                                     HandlerType::Http(handler) => {
                                         (handler)(state.clone(), parsed_request)
