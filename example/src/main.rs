@@ -55,6 +55,12 @@ fn ws_handler(state: Arc<State>, req: &HttpRequest, mut ws: WsConnection) {
     loop {
         let msg = ws.revc().unwrap();
         dbg!(&msg);
+        match msg {
+            WebSocketMessage::Text(text) => {
+                println!("len: {}", text.len());
+            }
+            _ => panic!("fakt"),
+        }
     }
 
     todo!()

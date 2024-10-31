@@ -4,6 +4,7 @@ use crate::{
     http::{self, HttpRequest, HttpResponse, StatusCode},
     WebSocketMessage, WsHandlerFunc,
 };
+use core::str;
 use std::{
     io::{BufRead, Read, Write},
     net::TcpStream,
@@ -28,7 +29,7 @@ impl WsConnection {
     }
 
     pub fn revc(&mut self) -> Result<WebSocketMessage, crate::Error> {
-        let mut message;
+        let mut message = WebSocketMessage::Close;
 
         loop {
             let frame = WebsocketFrame::parse(&mut self.stream)?;
@@ -73,7 +74,16 @@ impl WsConnection {
                         panic!("illegal");
                     }
                 }
-                OpCode::Continue => todo!(),
+                OpCode::Continue => match &mut message {
+                    WebSocketMessage::Text(text) => {
+                        let new_text = str::from_utf8(&frame.payload).unwrap();
+                        text.push_str(&new_text);
+                    }
+                    WebSocketMessage::Bytes(vec) => todo!(),
+                    WebSocketMessage::Close => todo!(),
+                    WebSocketMessage::Ping => todo!(),
+                    WebSocketMessage::Pong => todo!(),
+                },
             }
         }
 

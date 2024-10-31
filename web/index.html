@@ -17,6 +17,16 @@
         let socket = new WebSocket("ws/test");
         socket.addEventListener("open", (x) => {
           socket.send("faktencheck");
+          socket.send("faktencheck");
+
+          let string = "";
+          for (const i of Array(1000).keys()) {
+            string += "faktencheck";
+          }
+
+          console.log(string.length);
+          socket.send(string);
+
           socket.close();
         });
       }
