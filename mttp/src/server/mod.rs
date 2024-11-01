@@ -38,8 +38,8 @@ pub enum WebSocketMessage {
         code: Option<u16>,
         reason: Option<String>,
     },
-    Ping,
-    Pong,
+    Ping(Vec<u8>),
+    Pong(Vec<u8>),
 }
 
 type Handlers<State> = HashMap<String, RegisteredRoute<Arc<State>>>;

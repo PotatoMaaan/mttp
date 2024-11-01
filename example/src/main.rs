@@ -66,12 +66,11 @@ fn ws_handler(state: Arc<State>, req: &HttpRequest, mut ws: WsConnection) {
                 println!("Bytes");
             }
             WebSocketMessage::Close { code, reason } => {
-                ws.close(code, reason).unwrap();
-                println!("Close");
+                println!("Closed: {code:?}, {reason:?}");
                 return;
             }
-            WebSocketMessage::Ping => println!("Ping"),
-            WebSocketMessage::Pong => println!("Pong"),
+            WebSocketMessage::Ping(_) => println!("Ping"),
+            WebSocketMessage::Pong(_) => println!("Pong"),
         }
     }
 
