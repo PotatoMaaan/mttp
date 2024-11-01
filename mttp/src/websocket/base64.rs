@@ -1,5 +1,6 @@
 const BASE64_CHARS: &[u8] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
 
+// Written by claude opus
 pub fn encode(input: &[u8]) -> String {
     let mut encoded = String::new();
     let mut i = 0;
@@ -44,6 +45,16 @@ fn base_64_dec_test1() {
     let encoded = encode(s.as_bytes());
 
     let expected = "YW1vZ3VzIGFtb2d1cyBhbW9ndXMgdGhlIHZvaWNlcyB0aGUgdm9pY2VzIHRoZSBmb2cgaXMgY29taW5nIHRoZSBmb2cgaXMgY29taW5n";
+
+    assert_eq!(encoded, expected);
+}
+
+#[test]
+fn base_64_dec_test2() {
+    let s = "Lorem ipsum dolor sit amet consectetur adipisicing elit. Veniam neque in tempore sunt ut aliquid, laudantium, sapiente error soluta animi eveniet facere laboriosam fugit optio autem odio harum, vitae eligendi sint esse quasi. Vero, dolores quidem ad ipsa beatae sequi quibusdam! Facere animi accusantium quae, quo optio nobis quidem in.";
+    let encoded = encode(s.as_bytes());
+
+    let expected = "TG9yZW0gaXBzdW0gZG9sb3Igc2l0IGFtZXQgY29uc2VjdGV0dXIgYWRpcGlzaWNpbmcgZWxpdC4gVmVuaWFtIG5lcXVlIGluIHRlbXBvcmUgc3VudCB1dCBhbGlxdWlkLCBsYXVkYW50aXVtLCBzYXBpZW50ZSBlcnJvciBzb2x1dGEgYW5pbWkgZXZlbmlldCBmYWNlcmUgbGFib3Jpb3NhbSBmdWdpdCBvcHRpbyBhdXRlbSBvZGlvIGhhcnVtLCB2aXRhZSBlbGlnZW5kaSBzaW50IGVzc2UgcXVhc2kuIFZlcm8sIGRvbG9yZXMgcXVpZGVtIGFkIGlwc2EgYmVhdGFlIHNlcXVpIHF1aWJ1c2RhbSEgRmFjZXJlIGFuaW1pIGFjY3VzYW50aXVtIHF1YWUsIHF1byBvcHRpbyBub2JpcyBxdWlkZW0gaW4u";
 
     assert_eq!(encoded, expected);
 }

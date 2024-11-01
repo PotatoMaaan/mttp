@@ -51,15 +51,27 @@ fn error_handler(e: Box<dyn std::error::Error>) -> HttpResponse {
 }
 
 fn ws_handler(state: Arc<State>, req: &HttpRequest, mut ws: WsConnection) {
-    println!("recieving");
     loop {
-        let msg = ws.revc().unwrap();
-        dbg!(&msg);
+        let msg = ws.recv().unwrap();
+
         match msg {
             WebSocketMessage::Text(text) => {
-                println!("len: {}", text.len());
+                dbg!(&text.len());
+
+                ws.send(WebSocketMessage::Text(text)).unwrap();
+                println!("Text");
             }
-            _ => panic!("fakt"),
+            WebSocketMessage::Bytes(bytes) => {
+                ws.send(WebSocketMessage::Bytes(bytes)).unwrap();
+                println!("Bytes");
+            }
+            WebSocketMessage::Close { code, reason } => {
+                ws.close(code, reason).unwrap();
+                println!("Close");
+                return;
+            }
+            WebSocketMessage::Ping => println!("Ping"),
+            WebSocketMessage::Pong => println!("Pong"),
         }
     }
 

@@ -8,6 +8,7 @@ use core::str;
 use std::{
     io::{BufRead, Read, Write},
     net::TcpStream,
+    usize,
 };
 
 const WEBSOCKET_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
@@ -16,78 +17,164 @@ pub struct WsConnection {
     stream: TcpStream,
 }
 
-#[derive(Debug, PartialEq)]
-enum TypeLock {
-    Text,
-    Binary,
+enum Len {
     None,
+    Single(u8),
+    U16(u16),
+    U64(u64),
 }
 
+impl Len {
+    fn payload_len_byte(&self) -> u8 {
+        match self {
+            Len::None => 0,
+            Len::Single(len) => *len,
+            Len::U16(_) => 126,
+            Len::U64(_) => 127,
+        }
+    }
+}
+
+const PONG: [u8; 2] = [0b10001010, 0];
+
 impl WsConnection {
-    pub fn send(&mut self, message: WebSocketMessage) -> Result<usize, crate::Error> {
-        todo!()
+    pub fn send(&mut self, message: WebSocketMessage) -> Result<(), crate::Error> {
+        let payload = match &message {
+            WebSocketMessage::Text(text) => Some(text.as_bytes()),
+            WebSocketMessage::Bytes(ref vec) => Some(vec.as_slice()),
+            _ => None,
+        };
+
+        let opcode = match message {
+            WebSocketMessage::Text(_) => OpCode::Text,
+            WebSocketMessage::Bytes(_) => OpCode::Binary,
+            WebSocketMessage::Close { code: _, reason: _ } => OpCode::Close,
+            WebSocketMessage::Ping => OpCode::Ping,
+            WebSocketMessage::Pong => OpCode::Pong,
+        } as u8;
+
+        let mut header = [0u8; 2];
+        header[0] = opcode;
+
+        // set fin bit (we don't ever split messages across frames)
+        header[0] |= 0b10000000;
+
+        // clear reserved bits
+        header[0] &= !0b01110000;
+
+        let payload_len = match payload.map(|x| x.len()) {
+            Some(len @ ..=125) => Len::Single(len as u8),
+            Some(len @ ..0xFFFF) => Len::U16(len as u16),
+            Some(len) => Len::U64(len as u64),
+            None => Len::None,
+        };
+        header[1] = payload_len.payload_len_byte();
+
+        // clear mask bit (server messages must not be masked)
+        header[1] &= !0b10000000;
+
+        self.stream.write_all(&header).unwrap();
+
+        match payload_len {
+            Len::U16(len) => self.stream.write_all(&len.to_be_bytes()).unwrap(),
+            Len::U64(len) => self.stream.write_all(&len.to_be_bytes()).unwrap(),
+            _ => {}
+        }
+
+        if let Some(payload) = payload {
+            self.stream.write_all(payload).unwrap();
+        }
+
+        Ok(())
     }
 
-    pub fn revc(&mut self) -> Result<WebSocketMessage, crate::Error> {
-        let mut message = WebSocketMessage::Close;
+    pub fn recv(&mut self) -> Result<WebSocketMessage, crate::Error> {
+        let mut message = None;
 
         loop {
             let frame = WebsocketFrame::parse(&mut self.stream)?;
 
+            dbg!(&frame.fin);
+            dbg!(&frame.opcode);
+            dbg!(&frame.payload_len);
+
             match frame.opcode {
                 OpCode::Text => {
                     let string = String::from_utf8(frame.payload).unwrap();
-                    message = WebSocketMessage::Text(string);
-
-                    if frame.fin {
-                        return Ok(message);
-                    }
+                    message = Some(WebSocketMessage::Text(string));
                 }
                 OpCode::Binary => {
-                    message = WebSocketMessage::Bytes(frame.payload);
-
-                    if frame.fin {
-                        return Ok(message);
-                    }
+                    message = Some(WebSocketMessage::Bytes(frame.payload));
                 }
                 OpCode::Close => {
-                    message = WebSocketMessage::Close;
+                    let (code, reason) = if !frame.payload.is_empty() {
+                        let code: [u8; 2] = frame.payload.get(0..2).unwrap().try_into().unwrap();
+                        let code = u16::from_be_bytes(code);
 
-                    if frame.fin {
-                        return Ok(message);
-                    } else {
-                        panic!("illegal");
-                    }
-                }
-                OpCode::Ping => {
-                    message = WebSocketMessage::Ping;
+                        let mut payload = frame.payload;
+                        payload.remove(0);
+                        payload.remove(0);
 
-                    write!(self.stream, "pong").unwrap();
-                    if frame.fin {
-                        return Ok(message);
+                        (
+                            Some(code),
+                            if !payload.is_empty() {
+                                String::from_utf8(payload).ok()
+                            } else {
+                                None
+                            },
+                        )
                     } else {
-                        panic!("illegal");
-                    }
-                }
-                OpCode::Pong => {
+                        (None, None)
+                    };
+
+                    message = Some(WebSocketMessage::Close { code, reason });
+
                     if !frame.fin {
                         panic!("illegal");
                     }
                 }
-                OpCode::Continue => match &mut message {
+                OpCode::Ping => {
+                    message = Some(WebSocketMessage::Ping);
+
+                    self.stream.write_all(&PONG).unwrap();
+
+                    if !frame.fin {
+                        panic!("illegal");
+                    }
+                }
+                OpCode::Pong => {
+                    message = Some(WebSocketMessage::Pong);
+
+                    if !frame.fin {
+                        panic!("illegal");
+                    }
+                }
+                OpCode::Continue => match message.as_mut().expect("should always be set") {
                     WebSocketMessage::Text(text) => {
                         let new_text = str::from_utf8(&frame.payload).unwrap();
                         text.push_str(&new_text);
                     }
-                    WebSocketMessage::Bytes(vec) => todo!(),
-                    WebSocketMessage::Close => todo!(),
-                    WebSocketMessage::Ping => todo!(),
-                    WebSocketMessage::Pong => todo!(),
+                    WebSocketMessage::Bytes(vec) => {
+                        vec.extend(frame.payload);
+                    }
+                    WebSocketMessage::Close { code: _, reason: _ } => panic!("invalid"),
+                    WebSocketMessage::Ping => panic!("invalid"),
+                    WebSocketMessage::Pong => panic!("invalid"),
                 },
             }
-        }
 
-        todo!()
+            // if this is the last frame so we can return the message
+            if frame.fin {
+                return Ok(message.expect("should always have been set"));
+            }
+        }
+    }
+
+    pub fn close(&mut self, code: Option<u16>, reason: Option<String>) -> Result<(), crate::Error> {
+        self.send(WebSocketMessage::Close { code, reason })?;
+        self.stream.shutdown(std::net::Shutdown::Both).unwrap();
+
+        Ok(())
     }
 }
 
@@ -99,13 +186,14 @@ fn xor(payload: &mut [u8], key: [u8; 4]) {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[repr(u8)]
 pub enum OpCode {
-    Continue,
-    Text,
-    Binary,
-    Close,
-    Ping,
-    Pong,
+    Continue = 0x0,
+    Text = 0x1,
+    Binary = 0x2,
+    Close = 0x8,
+    Ping = 0x9,
+    Pong = 0xA,
 }
 
 impl OpCode {
@@ -122,7 +210,7 @@ impl OpCode {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct WebsocketFrame {
     fin: bool,
     opcode: OpCode,
@@ -133,18 +221,22 @@ struct WebsocketFrame {
 
 impl WebsocketFrame {
     pub fn parse(stream: &mut TcpStream) -> Result<Self, crate::Error> {
-        let mut header: [u8; 2] = [0; 2];
+        let mut header = [0; 1];
         stream.read_exact(&mut header).unwrap();
+        let header = header[0];
 
-        let fin = (header[0] & 0b10000000) > 0;
-        let opcode = header[0] & 0b00001111;
+        let fin = (header & 0b10000000) > 0;
+        let opcode = header & 0b00001111;
         let opcode = OpCode::parse(opcode).unwrap();
 
-        let mask = (header[1] & 0b10000000) > 0;
+        let mut header2 = [0; 1];
+        stream.read_exact(&mut header2).unwrap();
+        let header2 = header2[0];
 
-        let payload_len = header[1] & 0b01111111;
+        let mask = (header2 & 0b10000000) > 0;
+        let payload_len = header2 & 0b01111111;
 
-        // The payload can be 7 bits, 2 bytes or 8 bytes
+        // The payload len can be 7 bits, 2 bytes or 8 bytes
         let payload_len = match payload_len {
             ..=125 => payload_len as u64,
             126 => {
@@ -176,8 +268,6 @@ impl WebsocketFrame {
 
         assert_eq!(masking_key.is_some(), mask);
 
-        dbg!(&payload_len);
-
         Ok(WebsocketFrame {
             fin,
             opcode,
@@ -200,7 +290,7 @@ pub fn websocket<S: Clone>(
     handler: WsHandlerFunc<S>,
     mut stream: TcpStream,
 ) -> Result<(), crate::Error> {
-    if req.headers.get(ws::UPGRADE).map(String::as_str) != Some("websocket") {
+    if req.headers.get(ws::UPGRADE).map(|x| x.to_lowercase()) != Some("websocket".to_owned()) {
         return Err(crate::Error::MissingOrInvalidWebsocketHeader {
             header: ws::UPGRADE,
         });

@@ -34,7 +34,10 @@ pub struct Server<State: 'static + Send + Sync> {
 pub enum WebSocketMessage {
     Text(String),
     Bytes(Vec<u8>),
-    Close,
+    Close {
+        code: Option<u16>,
+        reason: Option<String>,
+    },
     Ping,
     Pong,
 }
