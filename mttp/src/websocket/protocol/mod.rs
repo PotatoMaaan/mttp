@@ -344,16 +344,8 @@ impl OpCode {
         match self {
             OpCode::Text => false,
             OpCode::Binary => false,
+            OpCode::Continue => false,
             _ => true,
-        }
-    }
-
-    fn is_data(&self) -> bool {
-        match self {
-            OpCode::Continue => true,
-            OpCode::Text => true,
-            OpCode::Binary => true,
-            _ => false,
         }
     }
 }
@@ -367,25 +359,20 @@ struct WebsocketFrame {
 
 impl WebsocketFrame {
     pub fn parse(stream: &mut TcpStream) -> Result<Self, crate::Error> {
-        let mut header = [0; 1];
+        let mut header = [0; 2];
         stream.read_exact(&mut header).unwrap();
-        let header = header[0];
 
-        let fin = (header & 0b10000000) > 0;
-        let opcode = header & 0b00001111;
+        let fin = (header[0] & 0b10000000) > 0;
+        let opcode = header[0] & 0b00001111;
         let opcode = OpCode::parse(opcode).unwrap();
 
-        let rsv_bits = header & 0b01110000;
+        let rsv_bits = header[0] & 0b01110000;
         if rsv_bits != 0 {
             panic!("illegal");
         }
 
-        let mut header2 = [0; 1];
-        stream.read_exact(&mut header2).unwrap();
-        let header2 = header2[0];
-
-        let mask = (header2 & 0b10000000) > 0;
-        let payload_len = header2 & 0b01111111;
+        let mask = (header[1] & 0b10000000) > 0;
+        let payload_len = header[1] & 0b01111111;
 
         // The payload len can be 7 bits, 2 bytes or 8 bytes
         let payload_len = match payload_len {
