@@ -6,6 +6,7 @@ use crate::{
 };
 use core::str;
 use std::{
+    collections::VecDeque,
     io::{Read, Write},
     net::TcpStream,
     usize,
@@ -15,6 +16,7 @@ const WEBSOCKET_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
 pub struct WsConnection {
     stream: TcpStream,
+    message_buffer: VecDeque<WebSocketMessage>,
 }
 
 enum Len {
@@ -35,6 +37,91 @@ impl Len {
     }
 }
 
+#[derive(Debug)]
+enum TypeLock {
+    /// This cannot be a string (see autobahn case 5.6)
+    Text(Vec<u8>),
+    Binary(Vec<u8>),
+    None,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(u16)]
+pub enum CloseReason {
+    Normal = 1000,
+    GoingAway = 1001,
+    ProtocolError = 1002,
+    UnacceptedData = 1003,
+    Reserved = 1004,
+    NoStatusCode = 1005,
+    ClosedAbnormally = 1006,
+    InconsistentData = 1007,
+    PolicyViolated = 1008,
+    TooBig = 1009,
+    MissingExtension = 1010,
+    ServerError = 1011,
+    TlsFailure = 1015,
+}
+
+impl CloseReason {
+    fn parse(code: u16) -> Option<Self> {
+        match code {
+            1000 => Some(CloseReason::Normal),
+            1001 => Some(CloseReason::GoingAway),
+            1002 => Some(CloseReason::ProtocolError),
+            1003 => Some(CloseReason::UnacceptedData),
+            1007 => Some(CloseReason::InconsistentData),
+            1008 => Some(CloseReason::PolicyViolated),
+            1009 => Some(CloseReason::TooBig),
+            1010 => Some(CloseReason::MissingExtension),
+            1011 => Some(CloseReason::ServerError),
+            _ => None,
+        }
+    }
+
+    pub fn code(&self) -> u16 {
+        *self as u16
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum CodeRange {
+    Defined(CloseReason),
+    Registered(u16),
+    Custom(u16),
+}
+
+impl CodeRange {
+    pub fn code(&self) -> u16 {
+        match self {
+            CodeRange::Defined(close_reason) => close_reason.code(),
+            CodeRange::Registered(code) => *code,
+            CodeRange::Custom(code) => *code,
+        }
+    }
+
+    fn parse(code: u16) -> Option<Self> {
+        match code {
+            1000..=2999 => CloseReason::parse(code).map(|reason| Self::Defined(reason)),
+            3000..=3999 => Some(Self::Registered(code)),
+            4000..=4999 => Some(Self::Custom(code)),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Close {
+    pub code: CodeRange,
+    pub reason: Option<String>,
+}
+
+impl Close {
+    pub fn raw_code(&self) -> u16 {
+        self.code.code()
+    }
+}
+
 impl WsConnection {
     pub fn send(&mut self, message: WebSocketMessage) -> Result<(), crate::Error> {
         let opcode = OpCode::from_msg(&message);
@@ -44,14 +131,13 @@ impl WsConnection {
             WebSocketMessage::Bytes(vec) => Some(vec),
             WebSocketMessage::Ping(vec) => Some(vec),
             WebSocketMessage::Pong(vec) => Some(vec),
-            WebSocketMessage::Close { code, reason } => {
-                let size_hint = reason.as_ref().and_then(|x| Some(x.len())).unwrap_or(0) + 2;
-                let mut payload = Vec::with_capacity(size_hint);
+            WebSocketMessage::Close(close) => {
+                let mut payload = Vec::with_capacity(125);
 
-                if let Some(code) = code {
-                    payload.extend(code.to_be_bytes());
+                if let Some(close) = close {
+                    payload.extend(close.raw_code().to_be_bytes());
 
-                    if let Some(reason) = reason {
+                    if let Some(reason) = close.reason {
                         payload.extend(reason.into_bytes());
                     }
                 }
@@ -72,7 +158,7 @@ impl WsConnection {
         // clear reserved bits
         header[0] &= !0b01110000;
 
-        let payload_len = match payload.as_ref().map(|x| x.len()) {
+        let payload_len = match payload.as_ref().map(Vec::len) {
             Some(len @ ..=125) => Len::Single(len as u8),
             Some(len @ ..=0xFFFF) => Len::U16(len as u16),
             Some(len) => Len::U64(len as u64),
@@ -99,21 +185,46 @@ impl WsConnection {
     }
 
     pub fn recv(&mut self) -> Result<WebSocketMessage, crate::Error> {
-        let mut message = None;
+        if let Some(msg) = self.message_buffer.pop_front() {
+            return Ok(msg);
+        }
+
+        let mut type_lock = TypeLock::None;
 
         loop {
             let frame = WebsocketFrame::parse(&mut self.stream)?;
 
             match frame.opcode {
-                OpCode::Text => {
-                    let string = String::from_utf8(frame.payload).unwrap();
-                    message = Some(WebSocketMessage::Text(string));
-                }
-                OpCode::Binary => {
-                    message = Some(WebSocketMessage::Bytes(frame.payload));
-                }
+                OpCode::Text => match type_lock {
+                    TypeLock::Text(_) => panic!("illegal"),
+                    TypeLock::Binary(_) => panic!("illegal"),
+                    TypeLock::None => {
+                        if frame.fin {
+                            return Ok(WebSocketMessage::Text(
+                                String::from_utf8(frame.payload).unwrap(),
+                            ));
+                        } else {
+                            type_lock = TypeLock::Text(frame.payload);
+                        }
+                    }
+                },
+                OpCode::Binary => match type_lock {
+                    TypeLock::Binary(_) => panic!("illegal"),
+                    TypeLock::Text(_) => panic!("illegal"),
+                    TypeLock::None => {
+                        if frame.fin {
+                            return Ok(WebSocketMessage::Bytes(frame.payload));
+                        } else {
+                            type_lock = TypeLock::Binary(frame.payload);
+                        }
+                    }
+                },
                 OpCode::Close => {
-                    let (code, reason) = if !frame.payload.is_empty() {
+                    if !frame.fin {
+                        panic!("illegal");
+                    }
+
+                    let close = if !frame.payload.is_empty() {
                         let code: [u8; 2] = frame.payload.get(0..2).unwrap().try_into().unwrap();
                         let code = u16::from_be_bytes(code);
 
@@ -121,64 +232,67 @@ impl WsConnection {
                         payload.remove(0);
                         payload.remove(0);
 
-                        (
-                            Some(code),
-                            if !payload.is_empty() {
-                                String::from_utf8(payload).ok()
-                            } else {
+                        Some(Close {
+                            code: CodeRange::parse(code).unwrap(),
+                            reason: if payload.is_empty() {
                                 None
+                            } else {
+                                Some(String::from_utf8(payload).unwrap())
                             },
-                        )
+                        })
                     } else {
-                        (None, None)
+                        None
                     };
 
-                    self.close(code, reason.clone())?;
+                    self.close(close.clone())?;
 
-                    message = Some(WebSocketMessage::Close { code, reason });
-
-                    if !frame.fin {
-                        panic!("illegal");
-                    }
+                    return Ok(WebSocketMessage::Close(close));
                 }
                 OpCode::Ping => {
-                    self.send(WebSocketMessage::Pong(frame.payload.clone()))?;
-                    message = Some(WebSocketMessage::Ping(frame.payload));
-
                     if !frame.fin {
                         panic!("illegal");
                     }
+
+                    self.send(WebSocketMessage::Pong(frame.payload.clone()))?;
+
+                    self.message_buffer
+                        .push_back(WebSocketMessage::Ping(frame.payload));
                 }
                 OpCode::Pong => {
-                    message = Some(WebSocketMessage::Pong(frame.payload));
-
                     if !frame.fin {
                         panic!("illegal");
                     }
-                }
-                OpCode::Continue => match message.as_mut().expect("should always be set") {
-                    WebSocketMessage::Text(text) => {
-                        let new_text = str::from_utf8(&frame.payload).unwrap();
-                        text.push_str(&new_text);
-                    }
-                    WebSocketMessage::Bytes(vec) => {
-                        vec.extend(frame.payload);
-                    }
-                    WebSocketMessage::Close { code: _, reason: _ } => panic!("invalid"),
-                    WebSocketMessage::Ping(_) => panic!("invalid"),
-                    WebSocketMessage::Pong(_) => panic!("invalid"),
-                },
-            }
 
-            // if this is the last frame so we can return the message
-            if frame.fin {
-                return Ok(message.expect("should always have been set"));
+                    self.message_buffer
+                        .push_back(WebSocketMessage::Ping(frame.payload));
+                }
+                OpCode::Continue => {
+                    match &mut type_lock {
+                        TypeLock::Text(vec) => {
+                            vec.extend(frame.payload);
+                        }
+                        TypeLock::Binary(vec) => {
+                            vec.extend(frame.payload);
+                        }
+                        TypeLock::None => panic!("illegal"),
+                    };
+
+                    if frame.fin {
+                        return Ok(match type_lock {
+                            TypeLock::Text(vec) => {
+                                WebSocketMessage::Text(String::from_utf8(vec).unwrap())
+                            }
+                            TypeLock::Binary(vec) => WebSocketMessage::Bytes(vec),
+                            TypeLock::None => panic!("illegal"),
+                        });
+                    }
+                }
             }
         }
     }
 
-    fn close(&mut self, code: Option<u16>, reason: Option<String>) -> Result<(), crate::Error> {
-        self.send(WebSocketMessage::Close { code, reason })?;
+    fn close(&mut self, close: Option<Close>) -> Result<(), crate::Error> {
+        self.send(WebSocketMessage::Close(close))?;
         self.stream.shutdown(std::net::Shutdown::Both).unwrap();
 
         Ok(())
@@ -220,7 +334,7 @@ impl OpCode {
         match msg {
             WebSocketMessage::Text(_) => OpCode::Text,
             WebSocketMessage::Bytes(_) => OpCode::Binary,
-            WebSocketMessage::Close { code: _, reason: _ } => OpCode::Close,
+            WebSocketMessage::Close(_) => OpCode::Close,
             WebSocketMessage::Ping(_) => OpCode::Ping,
             WebSocketMessage::Pong(_) => OpCode::Pong,
         }
@@ -233,14 +347,21 @@ impl OpCode {
             _ => true,
         }
     }
+
+    fn is_data(&self) -> bool {
+        match self {
+            OpCode::Continue => true,
+            OpCode::Text => true,
+            OpCode::Binary => true,
+            _ => false,
+        }
+    }
 }
 
 #[derive(Debug, Clone)]
 struct WebsocketFrame {
     fin: bool,
     opcode: OpCode,
-    payload_len: u64,
-    masking_key: Option<[u8; 4]>,
     payload: Vec<u8>,
 }
 
@@ -253,6 +374,11 @@ impl WebsocketFrame {
         let fin = (header & 0b10000000) > 0;
         let opcode = header & 0b00001111;
         let opcode = OpCode::parse(opcode).unwrap();
+
+        let rsv_bits = header & 0b01110000;
+        if rsv_bits != 0 {
+            panic!("illegal");
+        }
 
         let mut header2 = [0; 1];
         stream.read_exact(&mut header2).unwrap();
@@ -300,17 +426,9 @@ impl WebsocketFrame {
         Ok(WebsocketFrame {
             fin,
             opcode,
-            payload_len,
-            masking_key,
             payload,
         })
     }
-}
-
-#[derive(Debug)]
-enum FrameType {
-    Continue,
-    Text(String),
 }
 
 pub fn websocket<S: Clone>(
@@ -348,7 +466,10 @@ pub fn websocket<S: Clone>(
         .build();
     http::protocol::write_response(&mut stream, response)?;
 
-    let ws_conn = WsConnection { stream };
+    let ws_conn = WsConnection {
+        stream,
+        message_buffer: VecDeque::new(),
+    };
 
     println!("Calling WS handler");
     handler(state, &req, ws_conn);

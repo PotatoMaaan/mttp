@@ -56,8 +56,6 @@ fn ws_handler(state: Arc<State>, req: &HttpRequest, mut ws: WsConnection) {
 
         match msg {
             WebSocketMessage::Text(text) => {
-                dbg!(&text.len());
-
                 ws.send(WebSocketMessage::Text(text)).unwrap();
                 println!("Text");
             }
@@ -65,16 +63,14 @@ fn ws_handler(state: Arc<State>, req: &HttpRequest, mut ws: WsConnection) {
                 ws.send(WebSocketMessage::Bytes(bytes)).unwrap();
                 println!("Bytes");
             }
-            WebSocketMessage::Close { code, reason } => {
-                println!("Closed: {code:?}, {reason:?}");
+            WebSocketMessage::Close(close) => {
+                println!("Closed: {close:?}");
                 return;
             }
             WebSocketMessage::Ping(_) => println!("Ping"),
             WebSocketMessage::Pong(_) => println!("Pong"),
         }
     }
-
-    todo!()
 }
 
 // gets run after all handlers have run.

@@ -5,7 +5,7 @@ use crate::{
         response::HttpResponse,
         Method, StatusCode,
     },
-    websocket::{self, WsConnection},
+    websocket::{self, Close, WsConnection},
 };
 use routing::{build_dynamic_routes, router};
 use std::{
@@ -34,10 +34,7 @@ pub struct Server<State: 'static + Send + Sync> {
 pub enum WebSocketMessage {
     Text(String),
     Bytes(Vec<u8>),
-    Close {
-        code: Option<u16>,
-        reason: Option<String>,
-    },
+    Close(Option<Close>),
     Ping(Vec<u8>),
     Pong(Vec<u8>),
 }
