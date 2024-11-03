@@ -10,7 +10,7 @@ pub enum Error {
     InvalidHeaderValue { header: String },
     BodyTooShort { expt: usize, got: usize },
     UnsupportedVersion,
-    MissingOrInvalidWebsocketHeader {header: &'static str}
+    MissingOrInvalidWebsocketHeader { header: &'static str },
 }
 
 impl Display for Error {
@@ -27,8 +27,10 @@ impl Display for Error {
             Error::BodyTooShort { expt, got } => {
                 format!("Body too short. Expected {} got {}", expt, got)
             }
-            Error::UnsupportedVersion => format!("The specified HTTP versioon is not supported"),
-            Error::MissingOrInvalidWebsocketHeader { header } => format!("Missing or invalid header for websocket upgrade: {header}"),
+            Error::UnsupportedVersion => format!("The specified HTTP version is not supported"),
+            Error::MissingOrInvalidWebsocketHeader { header } => {
+                format!("Missing or invalid header for websocket upgrade: {header}")
+            }
         };
 
         write!(f, "{}", txt)

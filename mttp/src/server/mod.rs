@@ -30,15 +30,6 @@ pub struct Server<State: 'static + Send + Sync> {
     inspector: fn(&HttpResponse),
 }
 
-#[derive(Debug, Clone)]
-pub enum WebSocketMessage {
-    Text(String),
-    Bytes(Vec<u8>),
-    Close(Option<Close>),
-    Ping(Vec<u8>),
-    Pong(Vec<u8>),
-}
-
 type Handlers<State> = HashMap<String, RegisteredRoute<Arc<State>>>;
 type HttpHandlerFunc<S> = fn(S, HttpRequest) -> Result<HttpResponse, Box<dyn std::error::Error>>;
 type MiddlewareFunc<S> = fn(S, &mut HttpRequest) -> MiddlewareResult;
@@ -111,22 +102,19 @@ impl<State: 'static + Send + Sync> Server<State> {
                             {
                                 Ok(abort)
                             } else {
-                                // Actual handler gets run here
-
                                 match handler.handler {
                                     HandlerType::WebSocket(handler) => {
-                                        println!("[mttp] Handing off to websocket");
-                                        websocket::websocket(
-                                            state.clone(),
-                                            parsed_request,
-                                            handler,
-                                            stream,
-                                        )
-                                        .unwrap();
-                                        println!("[mttp] Control returned from websocket");
+                                        let ws_connection =
+                                            websocket::websocket_handshake(&parsed_request, stream)
+                                                .expect("Failed websocket handshake");
+
+                                        // WS Handler gets run here
+                                        (handler)(state.clone(), &parsed_request, ws_connection);
+
                                         return;
                                     }
                                     HandlerType::Http(handler) => {
+                                        // HTTP handler gets run here
                                         (handler)(state.clone(), parsed_request)
                                     }
                                 }

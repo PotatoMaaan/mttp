@@ -1,6 +1,10 @@
 mod base64;
 mod sha1;
 
+mod handshake;
 mod protocol;
 
-pub use protocol::{websocket, Close, CloseReason, CodeRange, WsConnection};
+pub use handshake::websocket_handshake;
+pub use protocol::{
+    consts, error::*, Close, CloseReason, CodeRange, WebSocketMessage, WsConnection,
+};

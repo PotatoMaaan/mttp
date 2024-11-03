@@ -1,7 +1,7 @@
 use mttp::{
     http::{HttpRequest, HttpResponse},
-    websocket::WsConnection,
-    MiddlewareResult, WebSocketMessage,
+    websocket::{WebSocketMessage, WsConnection},
+    MiddlewareResult,
 };
 use std::{
     collections::HashMap,
@@ -50,6 +50,7 @@ fn error_handler(e: Box<dyn std::error::Error>) -> HttpResponse {
         .build()
 }
 
+// Autobahn testsuite compliant websocket server
 fn ws_handler(state: Arc<State>, req: &HttpRequest, mut ws: WsConnection) {
     loop {
         let msg = ws.recv().unwrap();
@@ -64,7 +65,7 @@ fn ws_handler(state: Arc<State>, req: &HttpRequest, mut ws: WsConnection) {
                 println!("Bytes");
             }
             WebSocketMessage::Close(close) => {
-                println!("Closed: {close:?}");
+                println!("Close: {close:?}");
                 return;
             }
             WebSocketMessage::Ping(_) => println!("Ping"),

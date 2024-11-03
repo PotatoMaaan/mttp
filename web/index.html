@@ -27,7 +27,7 @@
         console.log(string.length);
         socket.send(string);
 
-        socket.close();
+        socket.close(1000, "fakten");
       });
     }
   </script>
