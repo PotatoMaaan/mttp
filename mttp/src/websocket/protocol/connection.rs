@@ -1,4 +1,6 @@
-use super::{frame::WebsocketFrame, Close, CodeRange, OpCode, WebSocketMessage};
+use super::{
+    consts::CHUNK_SIZE, frame::WebsocketFrame, Close, CodeRange, OpCode, WebSocketMessage,
+};
 use crate::websocket;
 use std::{collections::VecDeque, io::Write, net::TcpStream};
 
@@ -17,24 +19,6 @@ pub enum TypeLock {
     None,
 }
 
-enum Len {
-    None,
-    Single(u8),
-    U16(u16),
-    U64(u64),
-}
-
-impl Len {
-    fn payload_len_byte(&self) -> u8 {
-        match self {
-            Len::None => 0,
-            Len::Single(len) => *len,
-            Len::U16(_) => 126,
-            Len::U64(_) => 127,
-        }
-    }
-}
-
 impl WsConnection {
     pub(crate) fn new(stream: TcpStream, message_buffer: VecDeque<WebSocketMessage>) -> Self {
         Self {
@@ -48,62 +32,45 @@ impl WsConnection {
     /// This implementation currently does not support splitting messages across multiple frames,
     /// so it's advisable to avoid sending very large messages, as some clients may refuse such large frames.
     pub fn send(&mut self, message: WebSocketMessage) -> Result<(), std::io::Error> {
-        let opcode = OpCode::from_msg(&message);
+        let opcode = message.opcode();
 
-        let payload = match message {
-            WebSocketMessage::Text(text) => Some(text.into_bytes()),
-            WebSocketMessage::Bytes(vec) => Some(vec),
-            WebSocketMessage::Ping(vec) => Some(vec),
-            WebSocketMessage::Pong(vec) => Some(vec),
-            WebSocketMessage::Close(close) => {
-                let mut payload = Vec::with_capacity(125);
-
-                if let Some(close) = close {
-                    payload.extend(close.raw_code().to_be_bytes());
-
-                    if let Some(reason) = close.reason {
-                        payload.extend(reason.into_bytes());
+        let mut payload = match message {
+            WebSocketMessage::Text(payload) => payload.into_bytes(),
+            WebSocketMessage::Bytes(payload) => payload,
+            WebSocketMessage::Close(close) => match close {
+                Some(Close { code, reason }) => {
+                    let mut payload = Vec::from(code.code().to_be_bytes());
+                    if let Some(reason) = reason {
+                        payload.extend(reason.as_bytes());
                     }
-                }
 
-                match payload.is_empty() {
-                    false => Some(payload),
-                    true => None,
+                    payload
                 }
-            }
+                None => Vec::new(),
+            },
+            WebSocketMessage::Ping(payload) => payload,
+            WebSocketMessage::Pong(payload) => payload,
         };
 
-        let mut header = [0u8; 2];
-        header[0] = opcode as u8;
+        // let rest = loop {
+        //     if payload.len() <= CHUNK_SIZE && !opcode.is_control() {
+        //         break payload;
+        //     }
 
-        // set fin bit (we don't ever split messages across frames)
-        header[0] |= 0b10000000;
+        //     let frame = WebsocketFrame {
+        //         fin: false,
+        //         opcode,
+        //         payload: payload.remove(0..100),
+        //     };
+        // };
 
-        // clear reserved bits
-        header[0] &= !0b01110000;
-
-        let payload_len = match payload.as_ref().map(Vec::len) {
-            Some(len @ ..=125) => Len::Single(len as u8),
-            Some(len @ ..=0xFFFF) => Len::U16(len as u16),
-            Some(len) => Len::U64(len as u64),
-            None => Len::None,
+        let frame = WebsocketFrame {
+            fin: true,
+            opcode,
+            payload: std::borrow::Cow::Borrowed(&payload),
         };
-        header[1] = payload_len.payload_len_byte();
 
-        // clear mask bit (server messages must not be masked)
-        header[1] &= !0b10000000;
-
-        self.stream.write_all(&header)?;
-
-        match payload_len {
-            Len::U16(len) => self.stream.write_all(&len.to_be_bytes())?,
-            Len::U64(len) => self.stream.write_all(&len.to_be_bytes())?,
-            _ => {}
-        }
-
-        if let Some(payload) = payload {
-            self.stream.write_all(&payload)?;
-        }
+        frame.write(&mut self.stream)?;
 
         Ok(())
     }
@@ -141,7 +108,9 @@ impl WsConnection {
                 OpCode::Text => match type_lock {
                     TypeLock::None => {
                         if frame.fin {
-                            return Ok(WebSocketMessage::Text(String::from_utf8(frame.payload)?));
+                            return Ok(WebSocketMessage::Text(String::from_utf8(
+                                frame.payload.to_vec(),
+                            )?));
                         } else {
                             type_lock = TypeLock::Text(frame.payload);
                         }

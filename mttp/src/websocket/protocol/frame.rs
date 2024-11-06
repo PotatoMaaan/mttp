@@ -1,12 +1,34 @@
 use super::OpCode;
 use crate::websocket;
-use std::{io::Read, net::TcpStream};
+use std::{
+    borrow::Cow,
+    io::{Read, Write},
+    net::TcpStream,
+};
 
 #[derive(Debug, Clone)]
-pub struct WebsocketFrame {
+pub struct WebsocketFrame<'payload> {
     pub fin: bool,
     pub opcode: OpCode,
-    pub payload: Vec<u8>,
+    pub payload: Cow<'payload, [u8]>,
+}
+
+enum Len {
+    None,
+    Single(u8),
+    U16(u16),
+    U64(u64),
+}
+
+impl Len {
+    fn payload_len_byte(&self) -> u8 {
+        match self {
+            Len::None => 0,
+            Len::Single(len) => *len,
+            Len::U16(_) => 126,
+            Len::U64(_) => 127,
+        }
+    }
 }
 
 fn xor(payload: &mut [u8], key: [u8; 4]) {
@@ -16,7 +38,40 @@ fn xor(payload: &mut [u8], key: [u8; 4]) {
         .for_each(|(i, d)| *d ^= key[i % key.len()])
 }
 
-impl WebsocketFrame {
+impl<'payload> WebsocketFrame<'payload> {
+    pub fn write(&self, stream: &mut TcpStream) -> Result<(), std::io::Error> {
+        let mut header = [0u8; 2];
+        header[0] = self.opcode as u8;
+
+        // set fin bit (we don't ever split messages across frames)
+        header[0] |= 0b10000000;
+
+        // clear reserved bits
+        header[0] &= !0b01110000;
+
+        let payload_len = match self.payload.len() {
+            len @ ..=125 => Len::Single(len as u8),
+            len @ ..=0xFFFF => Len::U16(len as u16),
+            len => Len::U64(len as u64),
+        };
+        header[1] = payload_len.payload_len_byte();
+
+        // clear mask bit (server messages must not be masked)
+        header[1] &= !0b10000000;
+
+        stream.write_all(&header)?;
+
+        match payload_len {
+            Len::U16(len) => stream.write_all(&len.to_be_bytes())?,
+            Len::U64(len) => stream.write_all(&len.to_be_bytes())?,
+            _ => {}
+        }
+
+        stream.write_all(&self.payload)?;
+
+        Ok(())
+    }
+
     pub fn parse(stream: &mut TcpStream) -> Result<Self, websocket::Error> {
         let mut header = [0; 2];
         stream.read_exact(&mut header)?;
@@ -76,7 +131,7 @@ impl WebsocketFrame {
         Ok(WebsocketFrame {
             fin,
             opcode,
-            payload,
+            payload: Cow::Owned(payload),
         })
     }
 }
