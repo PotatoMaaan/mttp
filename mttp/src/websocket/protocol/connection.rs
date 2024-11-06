@@ -1,5 +1,5 @@
 use super::{
-    consts::CHUNK_SIZE,
+    consts::SEND_FRAME_CHUNK_SIZE,
     frame::{WebsocketFrame, WebsocketFrameRef},
     Close, CodeRange, OpCode, WebSocketMessage, WebSocketMessageRef,
 };
@@ -59,9 +59,9 @@ impl WsConnection {
             WebSocketMessageRef::Pong(payload) => Cow::Borrowed(*payload),
         };
 
-        let frames = if !opcode.is_control() && payload.len() > CHUNK_SIZE {
+        let frames = if !opcode.is_control() && payload.len() > SEND_FRAME_CHUNK_SIZE {
             let mut frames = payload
-                .chunks(CHUNK_SIZE)
+                .chunks(SEND_FRAME_CHUNK_SIZE)
                 .map(|payload| WebsocketFrameRef {
                     fin: false,
                     opcode: OpCode::Continue,

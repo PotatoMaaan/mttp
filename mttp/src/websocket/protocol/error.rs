@@ -1,4 +1,4 @@
-use super::{Close, CloseReason};
+use super::{consts::MAX_RECV_FRAME_SIZE, Close, CloseReason};
 use std::{fmt::Display, string::FromUtf8Error};
 
 #[derive(Debug)]
@@ -10,6 +10,7 @@ pub enum Error {
 #[derive(Debug)]
 pub enum ProtocolError {
     ControlPayloadTooLarge(u64),
+    PayloadTooLarge(u64),
     UnmaskedClientMessage,
     ReservedBitsSet,
     InvalidOpcode(u8),
@@ -76,21 +77,24 @@ impl Display for ProtocolError {
             ProtocolError::InvalidCloseFrame => write!(f, "Recieved an invalid close frame"),
             ProtocolError::InvalidCloseCode(code) => write!(f, "Invalid close code: {}", code),
             ProtocolError::InvalidUtf8(err) => write!(f, "Sent invalid UTF-8: {err}"),
+            ProtocolError::PayloadTooLarge(len) => write!(
+                f,
+                "The payload was too large for this implementation: {} (max: {})",
+                len, MAX_RECV_FRAME_SIZE
+            ),
         }
     }
 }
 
 impl ProtocolError {
     pub fn close(&self) -> Close {
-        match self {
-            ProtocolError::InvalidUtf8(_) => Close {
-                code: super::CodeRange::Defined(CloseReason::InconsistentData),
-                reason: Some(format!("{self}")),
-            },
-            _ => Close {
-                code: super::CodeRange::Defined(CloseReason::ProtocolError),
-                reason: Some(format!("{self}")),
-            },
+        Close {
+            code: super::CodeRange::Defined(match self {
+                ProtocolError::InvalidUtf8(_) => CloseReason::InconsistentData,
+                ProtocolError::PayloadTooLarge(_) => CloseReason::TooBig,
+                _ => CloseReason::ProtocolError,
+            }),
+            reason: Some(format!("{self}")),
         }
     }
 }

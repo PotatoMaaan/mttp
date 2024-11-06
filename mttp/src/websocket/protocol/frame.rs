@@ -1,15 +1,18 @@
 use super::OpCode;
-use crate::websocket;
-use std::{
-    io::{Read, Write},
-    net::TcpStream,
-};
+use crate::websocket::{self, consts::MAX_RECV_FRAME_SIZE};
+use std::io::{Read, Write};
 
 #[derive(Debug, Clone)]
 pub struct WebsocketFrame {
     pub fin: bool,
     pub opcode: OpCode,
     pub payload: Vec<u8>,
+}
+
+impl PartialEq<WebsocketFrameRef<'_>> for WebsocketFrame {
+    fn eq(&self, other: &WebsocketFrameRef) -> bool {
+        self.fin == other.fin && self.opcode == other.opcode && self.payload == other.payload
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -43,7 +46,7 @@ fn xor(payload: &mut [u8], key: [u8; 4]) {
 }
 
 impl<'payload> WebsocketFrameRef<'payload> {
-    pub fn write(&self, stream: &mut TcpStream) -> Result<(), std::io::Error> {
+    pub fn write(&self, mut stream: impl Write) -> Result<(), std::io::Error> {
         let mut header = [0u8; 2];
         header[0] = self.opcode as u8;
 
@@ -82,7 +85,7 @@ impl<'payload> WebsocketFrameRef<'payload> {
 }
 
 impl WebsocketFrame {
-    pub fn parse(stream: &mut TcpStream) -> Result<Self, websocket::Error> {
+    pub fn parse(mut stream: impl Read) -> Result<Self, websocket::Error> {
         let mut header = [0; 2];
         stream.read_exact(&mut header)?;
 
@@ -128,6 +131,10 @@ impl WebsocketFrame {
         } else {
             None
         };
+
+        if payload_len > MAX_RECV_FRAME_SIZE {
+            return Err(websocket::ProtocolError::PayloadTooLarge(payload_len).err());
+        }
 
         let mut payload = vec![0; payload_len as usize];
         stream.read_exact(&mut payload)?;

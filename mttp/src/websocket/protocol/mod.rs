@@ -5,6 +5,9 @@ pub mod error;
 mod frame;
 mod opcode;
 
+#[cfg(test)]
+mod test;
+
 use opcode::*;
 
 pub use close::{Close, CloseReason, CodeRange};

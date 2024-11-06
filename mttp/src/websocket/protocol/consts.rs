@@ -1,5 +1,6 @@
 pub const WEBSOCKET_GUID: &str = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
-pub const CHUNK_SIZE: usize = 10240;
+pub const SEND_FRAME_CHUNK_SIZE: usize = 10240;
+pub const MAX_RECV_FRAME_SIZE: u64 = 1073741824; // 1 GiB
 
 pub mod headers {
     pub const UPGRADE: &str = "Upgrade";
