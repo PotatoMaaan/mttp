@@ -1,4 +1,4 @@
-use crate::url::queryparams::parse_query_params_and_urldecode;
+use crate::url::parse_query_params_and_urldecode;
 use std::collections::HashMap;
 
 #[test]

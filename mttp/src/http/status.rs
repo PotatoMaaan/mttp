@@ -12,6 +12,7 @@ pub enum Method {
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum StatusCode {
+    SwitchingProtocols = 101,
     Ok = 200,
     Created = 201,
     Accepted = 202,
@@ -47,6 +48,7 @@ impl StatusCode {
             StatusCode::InternalServerError => "Internal Server Error",
             StatusCode::ImATeapot => "I'm a teapot",
             StatusCode::PaymentRequired => "Payment Required",
+            StatusCode::SwitchingProtocols => "Switching Protocols",
         }
     }
 }

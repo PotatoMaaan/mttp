@@ -1,7 +1,7 @@
 use super::urlencoding;
 use std::collections::HashMap;
 
-pub fn parse_query_params_and_urldecode<'a>(url: &'a str) -> (&'a str, HashMap<String, String>) {
+pub fn parse_query_params_and_urldecode(url: &str) -> (&str, HashMap<String, String>) {
     let Some(qm_index) = url.char_indices().find_map(|(i, c)| match c {
         '?' => Some(i),
         _ => None,
@@ -30,12 +30,11 @@ pub fn parse_query_params_and_urldecode<'a>(url: &'a str) -> (&'a str, HashMap<S
             }
         })
         .map(|(k, v)| (urlencoding::decode_string(k), urlencoding::decode_string(v)))
-        .map(|kv| match kv {
+        .filter_map(|kv| match kv {
             (Some(k), Some(v)) => Some((k, v)),
             _ => None,
         })
-        .filter_map(|x| x)
-        .filter(|x| x.0 != "")
+        .filter(|x| !x.0.is_empty())
         .collect::<HashMap<_, _>>();
 
     (url, params)

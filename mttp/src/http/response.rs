@@ -1,5 +1,5 @@
 use super::{header::HeaderMap, StatusCode};
-use crate::consts::HEADER_CONTENT_TYPE;
+use crate::http::consts::headers::CONTENT_TYPE;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpResponse {
@@ -64,16 +64,15 @@ impl HttpResponseBuilder {
         self.body = Some(text.into_bytes());
         self.header
             .values
-            .insert(HEADER_CONTENT_TYPE.to_owned(), "text/plain".to_owned());
+            .insert(CONTENT_TYPE.to_owned(), "text/plain".to_owned());
         self
     }
 
     pub fn json(mut self, json: String) -> Self {
         self.body = Some(json.into_bytes());
-        self.header.values.insert(
-            HEADER_CONTENT_TYPE.to_owned(),
-            "application/json".to_owned(),
-        );
+        self.header
+            .values
+            .insert(CONTENT_TYPE.to_owned(), "application/json".to_owned());
         self
     }
 

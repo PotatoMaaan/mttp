@@ -1,11 +1,36 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Test page</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Test page</title>
 </head>
+
 <body>
-    <h1>This is a test</h1>
+  <h1>This is a test</h1>
+  <button onclick="test_ws()">WS</button>
+
+  <script>
+    function test_ws() {
+      console.log("test_ws called");
+
+      let socket = new WebSocket("ws/test");
+      socket.addEventListener("open", (x) => {
+        socket.send("faktencheck");
+
+        let string = "";
+        for (const i of Array(1000).keys()) {
+          string += "longfaktencheck";
+        }
+
+        console.log(string.length);
+        socket.send(string);
+
+        socket.close(1000, "fakten");
+      });
+    }
+  </script>
 </body>
+
 </html>

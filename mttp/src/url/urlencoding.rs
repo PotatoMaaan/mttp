@@ -23,9 +23,7 @@ pub fn decode_binary(input: &str) -> Option<Vec<u8>> {
             }
         }
 
-        let Some(encoded) = input.get(i + 1..i + 3) else {
-            return None;
-        };
+        let encoded = input.get(i + 1..i + 3)?;
 
         let s = str::from_utf8(encoded)
             .expect("this came from a string so it should still be a valid string");
@@ -36,7 +34,7 @@ pub fn decode_binary(input: &str) -> Option<Vec<u8>> {
         i += 3;
     }
 
-    return Some(output);
+    Some(output)
 }
 
 pub fn decode_string(input: &str) -> Option<String> {

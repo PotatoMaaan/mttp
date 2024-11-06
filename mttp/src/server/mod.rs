@@ -1,14 +1,18 @@
-use crate::http::{
-    protocol::{parse_request, write_response},
-    request::HttpRequest,
-    response::HttpResponse,
-    Method, StatusCode,
+use crate::{
+    http::{
+        protocol::{parse_request, write_response},
+        request::HttpRequest,
+        response::HttpResponse,
+        Method, StatusCode,
+    },
+    websocket::{self, WsConnection},
 };
 use routing::{build_dynamic_routes, router};
 use std::{
     collections::HashMap,
     net::{SocketAddr, TcpListener},
     sync::{atomic::AtomicI64, Arc},
+    time::Instant,
 };
 
 mod default_handlers;
@@ -28,12 +32,19 @@ pub struct Server<State: 'static + Send + Sync> {
 }
 
 type Handlers<State> = HashMap<String, RegisteredRoute<Arc<State>>>;
-type HandlerFunc<S> = fn(S, HttpRequest) -> Result<HttpResponse, Box<dyn std::error::Error>>;
+type HttpHandlerFunc<S> = fn(S, HttpRequest) -> Result<HttpResponse, Box<dyn std::error::Error>>;
 type MiddlewareFunc<S> = fn(S, &mut HttpRequest) -> MiddlewareResult;
+pub(crate) type WsHandlerFunc<S> = fn(S, &HttpRequest, WsConnection);
+
+#[derive(Debug, Clone)]
+enum HandlerType<S> {
+    WebSocket(WsHandlerFunc<S>),
+    Http(HttpHandlerFunc<S>),
+}
 
 #[derive(Debug, Clone)]
 struct RegisteredRoute<S: Clone> {
-    handler: HandlerFunc<S>,
+    handler: HandlerType<S>,
     specific_middlewares: Vec<MiddlewareFunc<S>>,
     method: Method,
     params: HashMap<String, String>,
@@ -44,6 +55,8 @@ pub enum MiddlewareResult {
     Continue,
     Abort(HttpResponse),
 }
+
+pub type HttpResult = Result<HttpResponse, Box<dyn std::error::Error>>;
 
 impl<State: 'static + Send + Sync> Server<State> {
     pub fn start(self, addr: SocketAddr) -> std::io::Result<()> {
@@ -59,7 +72,9 @@ impl<State: 'static + Send + Sync> Server<State> {
             let method_not_allowed_handler = self.method_not_allowd_handler.clone();
             let dynamic_routes = dynamic_routes.clone();
             let middlewares = self.middlewares.clone();
-            let error_handler = self.error_handler.clone();
+            let error_handler = self.error_handler;
+
+            let start = Instant::now();
 
             let thread_id = self
                 .thread_counter
@@ -92,8 +107,23 @@ impl<State: 'static + Send + Sync> Server<State> {
                             {
                                 Ok(abort)
                             } else {
-                                // Actual handler gets run here
-                                (handler.handler)(state.clone(), parsed_request)
+                                match handler.handler {
+                                    HandlerType::WebSocket(handler) => {
+                                        println!("{:.2?}", start.elapsed());
+                                        let ws_connection =
+                                            websocket::websocket_handshake(&parsed_request, stream)
+                                                .expect("Failed websocket handshake");
+
+                                        // WS Handler gets run here
+                                        (handler)(state.clone(), &parsed_request, ws_connection);
+
+                                        return;
+                                    }
+                                    HandlerType::Http(handler) => {
+                                        // HTTP handler gets run here
+                                        (handler)(state.clone(), parsed_request)
+                                    }
+                                }
                             }
                         }
                         Err(e) => Ok(HttpResponse::builder()

@@ -1,6 +1,7 @@
 use mttp::{
     http::{HttpRequest, HttpResponse},
-    MiddlewareResult,
+    server::{self, HttpResult, MiddlewareResult},
+    websocket::{WebSocketMessage, WebSocketMessageRef, WsConnection},
 };
 use std::{
     collections::HashMap,
@@ -20,7 +21,7 @@ struct State {
 const WEB_DIR: &str = "web";
 
 fn main() {
-    let mut server = mttp::Server::new(State {
+    let mut server = server::Server::new(State {
         counter: AtomicU64::new(1),
         users: HashMap::from([(String::from("abc123"), String::from("user1"))]),
     });
@@ -29,6 +30,8 @@ fn main() {
     server.get("/only/with/auth", only_with_auth, vec![mw_auth]);
     server.get("/person/:id/info/:faktenlage/fake", person, vec![]);
     server.post("/echo", echo, vec![]);
+
+    server.websocket("/ws/test", ws_handler, vec![]);
 
     server.middleware(mw_log);
 
@@ -45,6 +48,30 @@ fn error_handler(e: Box<dyn std::error::Error>) -> HttpResponse {
         .text("Something went wrong".to_owned())
         .status(mttp::http::StatusCode::InternalServerError)
         .build()
+}
+
+// Autobahn testsuite compliant websocket server
+fn ws_handler(_state: Arc<State>, _req: &HttpRequest, mut ws: WsConnection) {
+    loop {
+        let msg = ws.recv().unwrap();
+
+        match msg {
+            WebSocketMessage::Text(text) => {
+                ws.send(&WebSocketMessageRef::Text(&text)).unwrap();
+                println!("Text");
+            }
+            WebSocketMessage::Bytes(bytes) => {
+                ws.send(&WebSocketMessageRef::Bytes(&bytes)).unwrap();
+                println!("Bytes");
+            }
+            WebSocketMessage::Close(close) => {
+                println!("Close: {close:?}");
+                return;
+            }
+            WebSocketMessage::Ping(_) => println!("Ping"),
+            WebSocketMessage::Pong(_) => println!("Pong"),
+        }
+    }
 }
 
 // gets run after all handlers have run.
@@ -75,7 +102,7 @@ fn mw_auth(state: Arc<State>, req: &mut HttpRequest) -> MiddlewareResult {
 }
 
 // A basic handler showing how many users have already visited
-fn hello(state: Arc<State>, _: HttpRequest) -> mttp::Result {
+fn hello(state: Arc<State>, _: HttpRequest) -> HttpResult {
     let count = state.counter.fetch_add(1, atomic::Ordering::SeqCst);
 
     println!("Hello from hello handler");
@@ -86,7 +113,7 @@ fn hello(state: Arc<State>, _: HttpRequest) -> mttp::Result {
 }
 
 // This handler is only accessable when the user is logged in
-fn only_with_auth(_: Arc<State>, req: HttpRequest) -> mttp::Result {
+fn only_with_auth(_: Arc<State>, req: HttpRequest) -> HttpResult {
     let username = req
         .params
         .get("_username")
@@ -98,7 +125,7 @@ fn only_with_auth(_: Arc<State>, req: HttpRequest) -> mttp::Result {
 }
 
 // Demo on how to get parameters from a route
-fn person(_: Arc<State>, req: HttpRequest) -> mttp::Result {
+fn person(_: Arc<State>, req: HttpRequest) -> HttpResult {
     let person_id = req.params.get("id").expect("handler param not registered");
     let Ok(person_id) = person_id.parse::<u64>() else {
         return Ok(HttpResponse::builder()
@@ -113,7 +140,7 @@ fn person(_: Arc<State>, req: HttpRequest) -> mttp::Result {
 }
 
 // Returns body and headers to the requester
-fn echo(_: Arc<State>, req: HttpRequest) -> mttp::Result {
+fn echo(_: Arc<State>, req: HttpRequest) -> HttpResult {
     println!("Hello from echo handler");
 
     Ok(HttpResponse::builder()
@@ -123,7 +150,7 @@ fn echo(_: Arc<State>, req: HttpRequest) -> mttp::Result {
 }
 
 // Fileserver serving as a fallback
-fn fileserver(_: Arc<State>, req: HttpRequest) -> mttp::Result {
+fn fileserver(_: Arc<State>, req: HttpRequest) -> HttpResult {
     let safe_route = req.raw_route.replace("../", "");
     let safe_route = safe_route.strip_prefix('/').unwrap_or(&safe_route);
 

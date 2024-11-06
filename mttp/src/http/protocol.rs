@@ -1,19 +1,19 @@
 use super::{header::HeaderMap, request::HttpRequest, HttpResponse, Method};
 use crate::{
-    consts::{CHUNK_END, HEADER_CONTENT_LEN, HTTP_VER_STR},
-    url, Error,
+    http::consts::{headers::CONTENT_LEN, CHUNK_END, HTTP_VER_STR},
+    url::parse_query_params_and_urldecode,
 };
 use std::{
     collections::HashMap,
     io::{BufRead, Read, Write},
 };
 
-pub(crate) fn parse_request(stream: &mut impl Read) -> Result<HttpRequest, Error> {
+pub(crate) fn parse_request(stream: &mut impl Read) -> Result<HttpRequest, super::Error> {
     let header_chunk = read_header(stream)?;
     let mut lines = header_chunk.lines();
 
     let Some(Ok(first)) = lines.next() else {
-        return Err(Error::InvalidHeader);
+        return Err(super::Error::InvalidHeader);
     };
     let mut first_line = first.splitn(4, ' ');
 
@@ -24,23 +24,25 @@ pub(crate) fn parse_request(stream: &mut impl Read) -> Result<HttpRequest, Error
         Some("DELETE") => Method::Delete,
         Some("PATCH") => Method::Patch,
         wrong_method => {
-            return Err(Error::InvalidMethod {
+            return Err(super::Error::InvalidMethod {
                 recieved: wrong_method.unwrap_or("").to_owned(),
             })
         }
     };
 
-    let raw_uri = first_line.next().ok_or(Error::NoUri)?.to_owned();
+    let raw_uri = first_line.next().ok_or(super::Error::NoUri)?.to_owned();
 
-    let http_ver = first_line.next().ok_or(Error::UnsupportedVersion)?;
+    let http_ver = first_line.next().ok_or(super::Error::UnsupportedVersion)?;
     if http_ver != HTTP_VER_STR {
-        return Err(Error::UnsupportedVersion);
+        return Err(super::Error::UnsupportedVersion);
     }
 
     let mut headers = HashMap::new();
     for header_line in lines {
         let header_line = header_line?;
-        let (key, value) = header_line.split_once(": ").ok_or(Error::InvalidHeader)?;
+        let (key, value) = header_line
+            .split_once(": ")
+            .ok_or(super::Error::InvalidHeader)?;
         headers.insert(key.to_owned(), value.to_owned());
     }
     let headers = HeaderMap { values: headers };
@@ -51,7 +53,7 @@ pub(crate) fn parse_request(stream: &mut impl Read) -> Result<HttpRequest, Error
         None
     };
 
-    let (only_uri, queryparams) = url::queryparams::parse_query_params_and_urldecode(&raw_uri);
+    let (only_uri, queryparams) = parse_query_params_and_urldecode(&raw_uri);
 
     Ok(HttpRequest {
         method,
@@ -63,7 +65,7 @@ pub(crate) fn parse_request(stream: &mut impl Read) -> Result<HttpRequest, Error
     })
 }
 
-fn read_header(stream: &mut impl Read) -> Result<Vec<u8>, Error> {
+fn read_header(stream: &mut impl Read) -> Result<Vec<u8>, super::Error> {
     let mut total: Vec<u8> = Vec::with_capacity(128);
 
     let mut current = [0; 4];
@@ -90,7 +92,7 @@ fn read_header(stream: &mut impl Read) -> Result<Vec<u8>, Error> {
     Ok(total)
 }
 
-fn read_body(stream: &mut impl Read, size: usize) -> Result<Vec<u8>, Error> {
+fn read_body(stream: &mut impl Read, size: usize) -> Result<Vec<u8>, super::Error> {
     let mut buf = vec![0; size];
     stream.read_exact(&mut buf)?;
 
@@ -98,19 +100,19 @@ fn read_body(stream: &mut impl Read, size: usize) -> Result<Vec<u8>, Error> {
 }
 
 pub(crate) fn write_response(
-    stream: &mut impl Write,
+    mut stream: impl Write,
     mut response: HttpResponse,
-) -> Result<(), crate::Error> {
+) -> Result<(), super::Error> {
     if let Some(body) = &response.body {
         response
             .headers
             .values
-            .insert(HEADER_CONTENT_LEN.to_owned(), body.len().to_string());
+            .insert(CONTENT_LEN.to_owned(), body.len().to_string());
     }
 
     stream.write_all(format!("{} {}", HTTP_VER_STR, response.status).as_bytes())?;
 
-    if response.headers.values.len() != 0 {
+    if !response.headers.values.is_empty() {
         for (key, value) in response.headers.values {
             stream.write_all(format!("\r\n{key}: {value}").as_bytes())?;
         }

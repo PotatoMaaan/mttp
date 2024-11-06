@@ -1,15 +1,12 @@
 //! # NOT FOR PRODUCTION USE
 //! This implementation is not complete and does not strictly adhear to the HTTP spec!
 
-pub type Result = core::result::Result<HttpResponse, Box<dyn std::error::Error>>;
-
-pub mod consts;
+/// Contains the http implementation
 pub mod http;
-pub mod url;
 
-mod error;
-mod server;
+/// Contains the websocket protocol implementation
+pub mod websocket;
 
-pub use error::Error;
-use http::HttpResponse;
-pub use server::*;
+/// Contains the main server implementation
+pub mod server;
+mod url;
