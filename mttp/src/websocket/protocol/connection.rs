@@ -70,15 +70,10 @@ impl WsConnection {
                     payload,
                 })
                 .collect::<Vec<_>>();
+
             assert!(frames.len() >= 2);
-
-            if let Some(first_frame) = frames.first_mut() {
-                first_frame.opcode = opcode;
-            }
-
-            if let Some(last_frame) = frames.last_mut() {
-                last_frame.fin = true;
-            }
+            frames.first_mut().expect("should always exist").opcode = opcode;
+            frames.last_mut().expect("should always exist").fin = true;
 
             frames
         } else {
@@ -133,9 +128,7 @@ impl WsConnection {
                 OpCode::Text => match type_lock {
                     TypeLock::None => {
                         if frame.fin {
-                            return Ok(WebSocketMessage::Text(String::from_utf8(
-                                frame.payload.to_vec(),
-                            )?));
+                            return Ok(WebSocketMessage::Text(String::from_utf8(frame.payload)?));
                         } else {
                             type_lock = TypeLock::Text(frame.payload);
                         }
@@ -188,7 +181,7 @@ impl WsConnection {
                         None
                     };
 
-                    self.close(close.clone())?;
+                    self.close(close.as_ref())?;
 
                     return Ok(WebSocketMessage::Close(close));
                 }
@@ -235,7 +228,7 @@ impl WsConnection {
         }
     }
 
-    fn close(&mut self, close: Option<Close>) -> Result<(), std::io::Error> {
+    fn close(&mut self, close: Option<&Close>) -> Result<(), std::io::Error> {
         self.send(&WebSocketMessageRef::Close(close))?;
         self.stream.shutdown(std::net::Shutdown::Both)?;
 
@@ -243,6 +236,6 @@ impl WsConnection {
     }
 
     fn error(&mut self, error: &websocket::ProtocolError) {
-        _ = self.close(Some(error.close()));
+        _ = self.close(Some(&error.close()));
     }
 }

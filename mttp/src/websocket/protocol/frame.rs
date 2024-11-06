@@ -1,7 +1,6 @@
 use super::OpCode;
 use crate::websocket;
 use std::{
-    borrow::Cow,
     io::{Read, Write},
     net::TcpStream,
 };
@@ -21,7 +20,6 @@ pub struct WebsocketFrameRef<'payload> {
 }
 
 enum Len {
-    None,
     Single(u8),
     U16(u16),
     U64(u64),
@@ -30,7 +28,6 @@ enum Len {
 impl Len {
     fn payload_len_byte(&self) -> u8 {
         match self {
-            Len::None => 0,
             Len::Single(len) => *len,
             Len::U16(_) => 126,
             Len::U64(_) => 127,
@@ -50,6 +47,7 @@ impl<'payload> WebsocketFrameRef<'payload> {
         let mut header = [0u8; 2];
         header[0] = self.opcode as u8;
 
+        // set or clear fin bit
         if self.fin {
             header[0] |= 0b10000000;
         } else {
@@ -134,11 +132,11 @@ impl WebsocketFrame {
         let mut payload = vec![0; payload_len as usize];
         stream.read_exact(&mut payload)?;
 
+        assert_eq!(masking_key.is_some(), mask);
+
         if let Some(masking_key) = masking_key {
             xor(&mut payload, masking_key);
         }
-
-        assert_eq!(masking_key.is_some(), mask);
 
         Ok(WebsocketFrame {
             fin,

@@ -23,7 +23,7 @@ pub enum WebSocketMessage {
 pub enum WebSocketMessageRef<'payload> {
     Text(&'payload str),
     Bytes(&'payload [u8]),
-    Close(Option<Close>),
+    Close(Option<&'payload Close>),
     Ping(&'payload [u8]),
     Pong(&'payload [u8]),
 }
