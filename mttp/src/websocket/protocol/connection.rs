@@ -1,8 +1,10 @@
 use super::{
-    consts::CHUNK_SIZE, frame::WebsocketFrame, Close, CodeRange, OpCode, WebSocketMessage,
+    consts::CHUNK_SIZE,
+    frame::{WebsocketFrame, WebsocketFrameRef},
+    Close, CodeRange, OpCode, WebSocketMessage, WebSocketMessageRef,
 };
 use crate::websocket;
-use std::{collections::VecDeque, io::Write, net::TcpStream};
+use std::{borrow::Cow, collections::VecDeque, io::Write, net::TcpStream};
 
 #[derive(Debug)]
 /// Represents a Websocket connection to a client
@@ -31,25 +33,26 @@ impl WsConnection {
     ///
     /// This implementation currently does not support splitting messages across multiple frames,
     /// so it's advisable to avoid sending very large messages, as some clients may refuse such large frames.
-    pub fn send(&mut self, message: WebSocketMessage) -> Result<(), std::io::Error> {
+    pub fn send(&mut self, message: &WebSocketMessageRef) -> Result<(), std::io::Error> {
         let opcode = message.opcode();
 
-        let mut payload = match message {
-            WebSocketMessage::Text(payload) => payload.into_bytes(),
-            WebSocketMessage::Bytes(payload) => payload,
-            WebSocketMessage::Close(close) => match close {
-                Some(Close { code, reason }) => {
-                    let mut payload = Vec::from(code.code().to_be_bytes());
-                    if let Some(reason) = reason {
-                        payload.extend(reason.as_bytes());
-                    }
-
-                    payload
+        let payload = match message {
+            WebSocketMessageRef::Text(payload) => Cow::Borrowed(payload.as_bytes()),
+            WebSocketMessageRef::Bytes(payload) => Cow::Borrowed(*payload),
+            &WebSocketMessageRef::Close(Some(Close {
+                ref code,
+                ref reason,
+            })) => {
+                let mut payload = Vec::from(code.code().to_be_bytes());
+                if let Some(reason) = reason {
+                    payload.extend(reason.as_bytes());
                 }
-                None => Vec::new(),
-            },
-            WebSocketMessage::Ping(payload) => payload,
-            WebSocketMessage::Pong(payload) => payload,
+
+                Cow::Owned(payload)
+            }
+            WebSocketMessageRef::Close(None) => Cow::Owned(Vec::new()),
+            WebSocketMessageRef::Ping(payload) => Cow::Borrowed(*payload),
+            WebSocketMessageRef::Pong(payload) => Cow::Borrowed(*payload),
         };
 
         // let rest = loop {
@@ -64,10 +67,10 @@ impl WsConnection {
         //     };
         // };
 
-        let frame = WebsocketFrame {
+        let frame = WebsocketFrameRef {
             fin: true,
             opcode,
-            payload: std::borrow::Cow::Borrowed(&payload),
+            payload: &payload,
         };
 
         frame.write(&mut self.stream)?;
@@ -172,7 +175,7 @@ impl WsConnection {
                         return Err(websocket::ProtocolError::ControlFrameNotFin.err());
                     }
 
-                    self.send(WebSocketMessage::Pong(frame.payload.clone()))?;
+                    self.send(&WebSocketMessageRef::Pong(&frame.payload))?;
 
                     self.message_buffer
                         .push_back(WebSocketMessage::Ping(frame.payload));
@@ -211,7 +214,7 @@ impl WsConnection {
     }
 
     fn close(&mut self, close: Option<Close>) -> Result<(), std::io::Error> {
-        self.send(WebSocketMessage::Close(close))?;
+        self.send(&WebSocketMessageRef::Close(close))?;
         self.stream.shutdown(std::net::Shutdown::Both)?;
 
         Ok(())

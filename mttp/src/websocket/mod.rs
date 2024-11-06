@@ -6,5 +6,6 @@ mod protocol;
 
 pub use handshake::websocket_handshake;
 pub use protocol::{
-    consts, error::*, Close, CloseReason, CodeRange, WebSocketMessage, WsConnection,
+    consts, error::*, Close, CloseReason, CodeRange, WebSocketMessage, WebSocketMessageRef,
+    WsConnection,
 };

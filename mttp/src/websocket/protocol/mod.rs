@@ -19,7 +19,16 @@ pub enum WebSocketMessage {
     Pong(Vec<u8>),
 }
 
-impl WebSocketMessage {
+#[derive(Debug, Clone)]
+pub enum WebSocketMessageRef<'payload> {
+    Text(&'payload str),
+    Bytes(&'payload [u8]),
+    Close(Option<Close>),
+    Ping(&'payload [u8]),
+    Pong(&'payload [u8]),
+}
+
+impl<'payload> WebSocketMessage {
     pub(crate) fn opcode(&self) -> OpCode {
         match self {
             WebSocketMessage::Text(_) => OpCode::Text,
@@ -27,6 +36,18 @@ impl WebSocketMessage {
             WebSocketMessage::Close(_) => OpCode::Close,
             WebSocketMessage::Ping(_) => OpCode::Ping,
             WebSocketMessage::Pong(_) => OpCode::Pong,
+        }
+    }
+}
+
+impl<'payload> WebSocketMessageRef<'payload> {
+    pub(crate) fn opcode(&self) -> OpCode {
+        match self {
+            WebSocketMessageRef::Text(_) => OpCode::Text,
+            WebSocketMessageRef::Bytes(_) => OpCode::Binary,
+            WebSocketMessageRef::Close(_) => OpCode::Close,
+            WebSocketMessageRef::Ping(_) => OpCode::Ping,
+            WebSocketMessageRef::Pong(_) => OpCode::Pong,
         }
     }
 }

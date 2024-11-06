@@ -7,10 +7,17 @@ use std::{
 };
 
 #[derive(Debug, Clone)]
-pub struct WebsocketFrame<'payload> {
+pub struct WebsocketFrame {
     pub fin: bool,
     pub opcode: OpCode,
-    pub payload: Cow<'payload, [u8]>,
+    pub payload: Vec<u8>,
+}
+
+#[derive(Debug, Clone)]
+pub struct WebsocketFrameRef<'payload> {
+    pub fin: bool,
+    pub opcode: OpCode,
+    pub payload: &'payload [u8],
 }
 
 enum Len {
@@ -38,7 +45,7 @@ fn xor(payload: &mut [u8], key: [u8; 4]) {
         .for_each(|(i, d)| *d ^= key[i % key.len()])
 }
 
-impl<'payload> WebsocketFrame<'payload> {
+impl<'payload> WebsocketFrameRef<'payload> {
     pub fn write(&self, stream: &mut TcpStream) -> Result<(), std::io::Error> {
         let mut header = [0u8; 2];
         header[0] = self.opcode as u8;
@@ -71,7 +78,9 @@ impl<'payload> WebsocketFrame<'payload> {
 
         Ok(())
     }
+}
 
+impl WebsocketFrame {
     pub fn parse(stream: &mut TcpStream) -> Result<Self, websocket::Error> {
         let mut header = [0; 2];
         stream.read_exact(&mut header)?;
@@ -131,7 +140,7 @@ impl<'payload> WebsocketFrame<'payload> {
         Ok(WebsocketFrame {
             fin,
             opcode,
-            payload: Cow::Owned(payload),
+            payload,
         })
     }
 }

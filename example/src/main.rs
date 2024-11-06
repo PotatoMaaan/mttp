@@ -1,6 +1,6 @@
 use mttp::{
     http::{HttpRequest, HttpResponse},
-    websocket::{WebSocketMessage, WsConnection},
+    websocket::{WebSocketMessage, WebSocketMessageRef, WsConnection},
     MiddlewareResult,
 };
 use std::{
@@ -57,11 +57,11 @@ fn ws_handler(state: Arc<State>, req: &HttpRequest, mut ws: WsConnection) {
 
         match msg {
             WebSocketMessage::Text(text) => {
-                ws.send(WebSocketMessage::Text(text)).unwrap();
+                ws.send(&WebSocketMessageRef::Text(&text)).unwrap();
                 println!("Text");
             }
             WebSocketMessage::Bytes(bytes) => {
-                ws.send(WebSocketMessage::Bytes(bytes)).unwrap();
+                ws.send(&WebSocketMessageRef::Bytes(&bytes)).unwrap();
                 println!("Bytes");
             }
             WebSocketMessage::Close(close) => {
