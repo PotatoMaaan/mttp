@@ -50,8 +50,11 @@ impl<'payload> WebsocketFrameRef<'payload> {
         let mut header = [0u8; 2];
         header[0] = self.opcode as u8;
 
-        // set fin bit (we don't ever split messages across frames)
-        header[0] |= 0b10000000;
+        if self.fin {
+            header[0] |= 0b10000000;
+        } else {
+            header[0] &= !0b10000000;
+        }
 
         // clear reserved bits
         header[0] &= !0b01110000;

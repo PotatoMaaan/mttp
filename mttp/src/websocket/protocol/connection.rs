@@ -4,7 +4,13 @@ use super::{
     Close, CodeRange, OpCode, WebSocketMessage, WebSocketMessageRef,
 };
 use crate::websocket;
-use std::{borrow::Cow, collections::VecDeque, io::Write, net::TcpStream};
+use core::str;
+use std::{
+    borrow::{Borrow, Cow},
+    collections::VecDeque,
+    io::Write,
+    net::TcpStream,
+};
 
 #[derive(Debug)]
 /// Represents a Websocket connection to a client
@@ -55,25 +61,41 @@ impl WsConnection {
             WebSocketMessageRef::Pong(payload) => Cow::Borrowed(*payload),
         };
 
-        // let rest = loop {
-        //     if payload.len() <= CHUNK_SIZE && !opcode.is_control() {
-        //         break payload;
-        //     }
+        let frames = if !opcode.is_control() && payload.len() > CHUNK_SIZE {
+            let mut frames = payload
+                .chunks(CHUNK_SIZE)
+                .map(|payload| WebsocketFrameRef {
+                    fin: false,
+                    opcode: OpCode::Continue,
+                    payload,
+                })
+                .collect::<Vec<_>>();
+            assert!(frames.len() >= 2);
 
-        //     let frame = WebsocketFrame {
-        //         fin: false,
-        //         opcode,
-        //         payload: payload.remove(0..100),
-        //     };
-        // };
+            if let Some(first_frame) = frames.first_mut() {
+                first_frame.opcode = opcode;
+            }
 
-        let frame = WebsocketFrameRef {
-            fin: true,
-            opcode,
-            payload: &payload,
+            if let Some(last_frame) = frames.last_mut() {
+                last_frame.fin = true;
+            }
+
+            frames
+        } else {
+            vec![WebsocketFrameRef {
+                fin: true,
+                opcode,
+                payload: payload.borrow(),
+            }]
         };
 
-        frame.write(&mut self.stream)?;
+        dbg!(&frames.len());
+
+        for frame in frames {
+            dbg!(&frame.fin, frame.opcode, frame.payload.len());
+
+            frame.write(&mut self.stream)?;
+        }
 
         Ok(())
     }
