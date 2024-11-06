@@ -80,7 +80,6 @@ pub fn test_request4() {
 pub fn test_request5() {
     let x = b"GET / HTTP/1.2";
     let got = parse_request(&mut x.as_slice());
-    dbg!(&got);
 
     assert!(got.is_err());
 }

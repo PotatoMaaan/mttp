@@ -28,18 +28,6 @@ pub enum WebSocketMessageRef<'payload> {
     Pong(&'payload [u8]),
 }
 
-impl<'payload> WebSocketMessage {
-    pub(crate) fn opcode(&self) -> OpCode {
-        match self {
-            WebSocketMessage::Text(_) => OpCode::Text,
-            WebSocketMessage::Bytes(_) => OpCode::Binary,
-            WebSocketMessage::Close(_) => OpCode::Close,
-            WebSocketMessage::Ping(_) => OpCode::Ping,
-            WebSocketMessage::Pong(_) => OpCode::Pong,
-        }
-    }
-}
-
 impl<'payload> WebSocketMessageRef<'payload> {
     pub(crate) fn opcode(&self) -> OpCode {
         match self {

@@ -66,7 +66,7 @@ impl CodeRange {
 
     pub(crate) fn parse(code: u16) -> Result<Self, websocket::ProtocolError> {
         match code {
-            1000..=2999 => CloseReason::parse(code).map(|reason| Self::Defined(reason)),
+            1000..=2999 => CloseReason::parse(code).map(Self::Defined),
             3000..=3999 => Ok(Self::Registered(code)),
             4000..=4999 => Ok(Self::Custom(code)),
             _ => Err(websocket::ProtocolError::InvalidCloseCode(code)),

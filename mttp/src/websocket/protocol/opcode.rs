@@ -1,7 +1,5 @@
 use crate::websocket;
 
-use super::WebSocketMessage;
-
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[repr(u8)]
 pub enum OpCode {
@@ -27,11 +25,6 @@ impl OpCode {
     }
 
     pub fn is_control(&self) -> bool {
-        match self {
-            OpCode::Text => false,
-            OpCode::Binary => false,
-            OpCode::Continue => false,
-            _ => true,
-        }
+        !matches!(self, OpCode::Text | OpCode::Binary | OpCode::Continue)
     }
 }

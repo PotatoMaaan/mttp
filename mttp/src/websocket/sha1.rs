@@ -2,6 +2,7 @@ const BLOCK_SIZE: usize = 64;
 const DIGEST_SIZE: usize = 20;
 
 // claude opus made this, i didn't wanna bother with my own sha1 impl for now
+#[allow(clippy::needless_range_loop)]
 pub fn sha1(data: &[u8]) -> [u8; DIGEST_SIZE] {
     let mut h0: u32 = 0x67452301;
     let mut h1: u32 = 0xEFCDAB89;

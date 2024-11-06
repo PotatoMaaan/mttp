@@ -62,7 +62,7 @@ pub fn router<State: 'static + Send + Sync>(
     method_not_allowed_handler: RegisteredRoute<Arc<State>>,
     current_request: &HttpRequest,
 ) -> RegisteredRoute<Arc<State>> {
-    if let Some(handler) = match_route(&routes, current_request) {
+    if let Some(handler) = match_route(routes, current_request) {
         if current_request.method == handler.method {
             handler.clone()
         } else {

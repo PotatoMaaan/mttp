@@ -15,25 +15,26 @@ pub enum Error {
 
 impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let txt = match self {
-            Error::Io(e) => format!("Io Error: {e}"),
-            Error::Empty => format!("A required field was empty"),
-            Error::InvalidHeader => format!("A header was invalid"),
-            Error::NoUri => format!("No URI was provided"),
-            Error::InvalidMethod { recieved } => format!("Invalid method '{recieved}'"),
+        match self {
+            Error::Io(e) => write!(f, "Io Error: {e}"),
+            Error::Empty => write!(f, "A required field was empty"),
+            Error::InvalidHeader => write!(f, "A header was invalid"),
+            Error::NoUri => write!(f, "No URI was provided"),
+            Error::InvalidMethod { recieved } => write!(f, "Invalid method '{recieved}'"),
             Error::InvalidHeaderValue { header } => {
-                format!("Header {header} contains an invalid value")
+                write!(f, "Header {header} contains an invalid value")
             }
             Error::BodyTooShort { expt, got } => {
-                format!("Body too short. Expected {} got {}", expt, got)
+                write!(f, "Body too short. Expected {} got {}", expt, got)
             }
-            Error::UnsupportedVersion => format!("The specified HTTP version is not supported"),
+            Error::UnsupportedVersion => write!(f, "The specified HTTP version is not supported"),
             Error::MissingOrInvalidWebsocketHeader { header } => {
-                format!("Missing or invalid header for websocket upgrade: {header}")
+                write!(
+                    f,
+                    "Missing or invalid header for websocket upgrade: {header}"
+                )
             }
-        };
-
-        write!(f, "{}", txt)
+        }
     }
 }
 

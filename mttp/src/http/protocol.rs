@@ -111,7 +111,7 @@ pub(crate) fn write_response(
 
     stream.write_all(format!("{} {}", HTTP_VER_STR, response.status).as_bytes())?;
 
-    if response.headers.values.len() != 0 {
+    if !response.headers.values.is_empty() {
         for (key, value) in response.headers.values {
             stream.write_all(format!("\r\n{key}: {value}").as_bytes())?;
         }

@@ -57,15 +57,11 @@ impl HeaderMap {
             return HashMap::new();
         };
 
-        if let Some(cookies) = cookies_str
+        cookies_str
             .split("; ")
             .map(|x| x.split_once('='))
             .collect::<Option<HashMap<_, _>>>()
-        {
-            cookies
-        } else {
-            HashMap::new()
-        }
+            .unwrap_or_default()
     }
 
     pub fn get(&self, key: &str) -> Option<&String> {

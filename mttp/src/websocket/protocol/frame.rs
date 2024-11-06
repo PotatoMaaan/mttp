@@ -75,7 +75,7 @@ impl<'payload> WebsocketFrameRef<'payload> {
             _ => {}
         }
 
-        stream.write_all(&self.payload)?;
+        stream.write_all(self.payload)?;
 
         Ok(())
     }

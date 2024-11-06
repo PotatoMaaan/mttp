@@ -5,7 +5,7 @@ use crate::{
         response::HttpResponse,
         Method, StatusCode,
     },
-    websocket::{self, Close, WsConnection},
+    websocket::{self, WsConnection},
 };
 use routing::{build_dynamic_routes, router};
 use std::{
@@ -69,7 +69,7 @@ impl<State: 'static + Send + Sync> Server<State> {
             let method_not_allowed_handler = self.method_not_allowd_handler.clone();
             let dynamic_routes = dynamic_routes.clone();
             let middlewares = self.middlewares.clone();
-            let error_handler = self.error_handler.clone();
+            let error_handler = self.error_handler;
 
             let thread_id = self
                 .thread_counter

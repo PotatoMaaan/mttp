@@ -51,7 +51,7 @@ fn error_handler(e: Box<dyn std::error::Error>) -> HttpResponse {
 }
 
 // Autobahn testsuite compliant websocket server
-fn ws_handler(state: Arc<State>, req: &HttpRequest, mut ws: WsConnection) {
+fn ws_handler(_state: Arc<State>, _req: &HttpRequest, mut ws: WsConnection) {
     loop {
         let msg = ws.recv().unwrap();
 

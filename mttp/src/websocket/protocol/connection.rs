@@ -4,11 +4,9 @@ use super::{
     Close, CodeRange, OpCode, WebSocketMessage, WebSocketMessageRef,
 };
 use crate::websocket;
-use core::str;
 use std::{
     borrow::{Borrow, Cow},
     collections::VecDeque,
-    io::Write,
     net::TcpStream,
 };
 
@@ -84,11 +82,7 @@ impl WsConnection {
             }]
         };
 
-        dbg!(&frames.len());
-
         for frame in frames {
-            dbg!(&frame.fin, frame.opcode, frame.payload.len());
-
             frame.write(&mut self.stream)?;
         }
 
@@ -103,14 +97,12 @@ impl WsConnection {
     /// a text message split across multiple frames with a ping message in between,
     /// this method will first return the text message and then the ping message.
     pub fn recv(&mut self) -> Result<WebSocketMessage, websocket::Error> {
-        self.recv_inner().map_err(|err| {
-            match &err {
-                websocket::Error::Protocol(protocol_error) => {
-                    self.error(&protocol_error);
-                }
-                websocket::Error::Local(_) => {}
+        self.recv_inner().inspect_err(|err| match &err {
+            // Only return protocol errors to untrusted peers
+            websocket::Error::Protocol(protocol_error) => {
+                self.error(protocol_error);
             }
-            err
+            websocket::Error::Local(_) => {}
         })
     }
 
