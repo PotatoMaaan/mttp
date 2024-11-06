@@ -3,6 +3,7 @@ use crate::websocket;
 /// All closing codes defined in the websockert RFC
 #[derive(Debug, Clone, Copy)]
 #[repr(u16)]
+#[allow(missing_docs)]
 pub enum CloseReason {
     Normal = 1000,
     GoingAway = 1001,
@@ -74,9 +75,12 @@ impl CodeRange {
     }
 }
 
+/// The contents of a closing Frame
 #[derive(Debug, Clone)]
 pub struct Close {
+    /// The close code can be in different ranges
     pub code: CodeRange,
+    /// An optional string describing why the connection was closed
     pub reason: Option<String>,
 }
 

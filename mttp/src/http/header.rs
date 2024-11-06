@@ -1,4 +1,4 @@
-use crate::consts::headers::{CONTENT_LEN, CONTENT_TYPE, COOKIES};
+use crate::http::consts::headers::{CONTENT_LEN, CONTENT_TYPE, COOKIES};
 use std::collections::HashMap;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

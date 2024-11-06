@@ -65,7 +65,7 @@ pub fn test_request4() {
 
     match got {
         Err(e) => match e {
-            crate::Error::UnsupportedVersion => {}
+            crate::http::Error::UnsupportedVersion => {}
             _ => {
                 panic!("Wrong error");
             }

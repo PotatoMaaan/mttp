@@ -1,3 +1,4 @@
+use super::HttpResponse;
 use std::{fmt::Display, io};
 
 #[derive(Debug)]

@@ -1,5 +1,5 @@
 use super::{header::HeaderMap, StatusCode};
-use crate::consts::headers::CONTENT_TYPE;
+use crate::http::consts::headers::CONTENT_TYPE;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HttpResponse {

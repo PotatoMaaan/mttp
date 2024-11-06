@@ -1,6 +1,7 @@
 use super::{consts::MAX_RECV_FRAME_SIZE, Close, CloseReason};
 use std::{fmt::Display, string::FromUtf8Error};
 
+/// The error can either be local (the connection was interrupted) or a protocol error (the client misbehaved)
 #[derive(Debug)]
 pub enum Error {
     Protocol(ProtocolError),
@@ -87,6 +88,7 @@ impl Display for ProtocolError {
 }
 
 impl ProtocolError {
+    /// Generates a close frame for this error that is appropriate to send to untrusted peers
     pub fn close(&self) -> Close {
         Close {
             code: super::CodeRange::Defined(match self {

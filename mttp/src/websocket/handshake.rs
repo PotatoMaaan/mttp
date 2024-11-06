@@ -14,13 +14,13 @@ use std::{collections::VecDeque, net::TcpStream};
 pub fn websocket_handshake(
     req: &HttpRequest,
     mut stream: TcpStream,
-) -> Result<WsConnection, crate::Error> {
+) -> Result<WsConnection, http::Error> {
     if req.headers.get(UPGRADE).map(|x| x.to_lowercase()) != Some("websocket".to_owned()) {
-        return Err(crate::Error::MissingOrInvalidWebsocketHeader { header: UPGRADE });
+        return Err(http::Error::MissingOrInvalidWebsocketHeader { header: UPGRADE });
     }
 
     let Some(key) = req.headers.get(SEC_WEBSOCKET_KEY) else {
-        return Err(crate::Error::MissingOrInvalidWebsocketHeader {
+        return Err(http::Error::MissingOrInvalidWebsocketHeader {
             header: SEC_WEBSOCKET_KEY,
         });
     };

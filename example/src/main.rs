@@ -1,7 +1,7 @@
 use mttp::{
     http::{HttpRequest, HttpResponse},
+    server::{self, HttpResult, MiddlewareResult},
     websocket::{WebSocketMessage, WebSocketMessageRef, WsConnection},
-    MiddlewareResult,
 };
 use std::{
     collections::HashMap,
@@ -21,7 +21,7 @@ struct State {
 const WEB_DIR: &str = "web";
 
 fn main() {
-    let mut server = mttp::Server::new(State {
+    let mut server = server::Server::new(State {
         counter: AtomicU64::new(1),
         users: HashMap::from([(String::from("abc123"), String::from("user1"))]),
     });
@@ -102,7 +102,7 @@ fn mw_auth(state: Arc<State>, req: &mut HttpRequest) -> MiddlewareResult {
 }
 
 // A basic handler showing how many users have already visited
-fn hello(state: Arc<State>, _: HttpRequest) -> mttp::Result {
+fn hello(state: Arc<State>, _: HttpRequest) -> HttpResult {
     let count = state.counter.fetch_add(1, atomic::Ordering::SeqCst);
 
     println!("Hello from hello handler");
@@ -113,7 +113,7 @@ fn hello(state: Arc<State>, _: HttpRequest) -> mttp::Result {
 }
 
 // This handler is only accessable when the user is logged in
-fn only_with_auth(_: Arc<State>, req: HttpRequest) -> mttp::Result {
+fn only_with_auth(_: Arc<State>, req: HttpRequest) -> HttpResult {
     let username = req
         .params
         .get("_username")
@@ -125,7 +125,7 @@ fn only_with_auth(_: Arc<State>, req: HttpRequest) -> mttp::Result {
 }
 
 // Demo on how to get parameters from a route
-fn person(_: Arc<State>, req: HttpRequest) -> mttp::Result {
+fn person(_: Arc<State>, req: HttpRequest) -> HttpResult {
     let person_id = req.params.get("id").expect("handler param not registered");
     let Ok(person_id) = person_id.parse::<u64>() else {
         return Ok(HttpResponse::builder()
@@ -140,7 +140,7 @@ fn person(_: Arc<State>, req: HttpRequest) -> mttp::Result {
 }
 
 // Returns body and headers to the requester
-fn echo(_: Arc<State>, req: HttpRequest) -> mttp::Result {
+fn echo(_: Arc<State>, req: HttpRequest) -> HttpResult {
     println!("Hello from echo handler");
 
     Ok(HttpResponse::builder()
@@ -150,7 +150,7 @@ fn echo(_: Arc<State>, req: HttpRequest) -> mttp::Result {
 }
 
 // Fileserver serving as a fallback
-fn fileserver(_: Arc<State>, req: HttpRequest) -> mttp::Result {
+fn fileserver(_: Arc<State>, req: HttpRequest) -> HttpResult {
     let safe_route = req.raw_route.replace("../", "");
     let safe_route = safe_route.strip_prefix('/').unwrap_or(&safe_route);
 

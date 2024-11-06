@@ -12,6 +12,7 @@ use std::{
     collections::HashMap,
     net::{SocketAddr, TcpListener},
     sync::{atomic::AtomicI64, Arc},
+    time::Instant,
 };
 
 mod default_handlers;
@@ -55,6 +56,8 @@ pub enum MiddlewareResult {
     Abort(HttpResponse),
 }
 
+pub type HttpResult = Result<HttpResponse, Box<dyn std::error::Error>>;
+
 impl<State: 'static + Send + Sync> Server<State> {
     pub fn start(self, addr: SocketAddr) -> std::io::Result<()> {
         println!("Binding mttp server to http://{}", addr);
@@ -70,6 +73,8 @@ impl<State: 'static + Send + Sync> Server<State> {
             let dynamic_routes = dynamic_routes.clone();
             let middlewares = self.middlewares.clone();
             let error_handler = self.error_handler;
+
+            let start = Instant::now();
 
             let thread_id = self
                 .thread_counter
@@ -104,6 +109,7 @@ impl<State: 'static + Send + Sync> Server<State> {
                             } else {
                                 match handler.handler {
                                     HandlerType::WebSocket(handler) => {
+                                        println!("{:.2?}", start.elapsed());
                                         let ws_connection =
                                             websocket::websocket_handshake(&parsed_request, stream)
                                                 .expect("Failed websocket handshake");
